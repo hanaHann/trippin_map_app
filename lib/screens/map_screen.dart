@@ -270,34 +270,57 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // Tile Style Floating Controller
+          // Tile Style & Floating Zoom Controllers
           Positioned(
             top: 16,
             right: 16,
-            child: Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: DropdownButton<MapTileStyle>(
-                  value: provider.tileStyle,
-                  underline: const SizedBox(),
-                  icon: const Icon(Icons.layers, size: 20),
-                  items: const [
-                    DropdownMenuItem(
-                        value: MapTileStyle.light, child: Text('極簡亮色')),
-                    DropdownMenuItem(
-                        value: MapTileStyle.dark, child: Text('霓虹暗黑')),
-                    DropdownMenuItem(
-                        value: MapTileStyle.osm, child: Text('經典地圖')),
-                    DropdownMenuItem(
-                        value: MapTileStyle.satellite, child: Text('衛星地圖')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) provider.setTileStyle(val);
-                  },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: DropdownButton<MapTileStyle>(
+                      value: provider.tileStyle,
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.layers, size: 20),
+                      items: const [
+                        DropdownMenuItem(
+                            value: MapTileStyle.light, child: Text('極簡亮色')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.dark, child: Text('霓虹暗黑')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.osm, child: Text('經典地圖')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.satellite, child: Text('衛星地圖')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) provider.setTileStyle(val);
+                      },
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'btn_zoom_in',
+                  onPressed: () {
+                    final zoom = _mapController.camera.zoom + 1.0;
+                    _mapController.move(_mapController.camera.center, zoom);
+                  },
+                  child: const Icon(Icons.add),
+                ),
+                const SizedBox(height: 6),
+                FloatingActionButton.small(
+                  heroTag: 'btn_zoom_out',
+                  onPressed: () {
+                    final zoom = _mapController.camera.zoom - 1.0;
+                    _mapController.move(_mapController.camera.center, zoom);
+                  },
+                  child: const Icon(Icons.remove),
+                ),
+              ],
             ),
           ),
         ],

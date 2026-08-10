@@ -20,7 +20,7 @@ class TripPinApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '旅圖 TripPin - 自訂常駐標籤地圖',
+      title: 'MapMap - 自訂常駐標籤地圖',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

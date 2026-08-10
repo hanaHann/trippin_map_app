@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 class AdBannerWidget extends StatefulWidget {
-  final String? realAdUnitId;
+  final String? customAdUnitId;
 
-  const AdBannerWidget({super.key, this.realAdUnitId});
+  const AdBannerWidget({super.key, this.customAdUnitId});
 
   @override
   State<AdBannerWidget> createState() => _AdBannerWidgetState();
@@ -15,6 +15,9 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
 
+  // User's official Google AdMob Ad Unit ID (ca-app-pub-3229282743833938/4463856124)
+  static const String realAdUnitId = 'ca-app-pub-3229282743833938/4463856124';
+
   @override
   void initState() {
     super.initState();
@@ -22,14 +25,16 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   }
 
   void _loadAd() {
-    // Standard Google AdMob Test Banner IDs for safe testing
+    // Official Google Test Ad Unit IDs for safe local debugging
     final String testAdUnitId = defaultTargetPlatform == TargetPlatform.iOS
         ? 'ca-app-pub-3940256099942544/2934735716'
         : 'ca-app-pub-3940256099942544/6300978111';
 
-    final String adUnitId = (widget.realAdUnitId != null && widget.realAdUnitId!.contains('/'))
-        ? widget.realAdUnitId!
-        : testAdUnitId;
+    // Use test ID during local debug to prevent self-click policy violations,
+    // and use real user Ad Unit ID in release mode (App Store / TestFlight)
+    final String adUnitId = kDebugMode
+        ? testAdUnitId
+        : (widget.customAdUnitId ?? realAdUnitId);
 
     _bannerAd = BannerAd(
       adUnitId: adUnitId,
@@ -37,9 +42,11 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          setState(() {
-            _isLoaded = true;
-          });
+          if (mounted) {
+            setState(() {
+              _isLoaded = true;
+            });
+          }
         },
         onAdFailedToLoad: (ad, error) {
           ad.dispose();

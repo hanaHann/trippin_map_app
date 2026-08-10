@@ -32,36 +32,84 @@ class LandmarkListDrawer extends StatelessWidget {
     return Drawer(
       child: Column(
         children: [
-          // Drawer Header
-          UserAccountsDrawerHeader(
+          // Compact Non-Blocking Drawer Header
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 16,
+              bottom: 16,
+              left: 16,
+              right: 16,
+            ),
+            width: double.infinity,
             decoration: BoxDecoration(
               gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
                 colors: [
                   Theme.of(context).colorScheme.primary,
                   Theme.of(context).colorScheme.tertiary,
                 ],
               ),
             ),
-            accountName: Text(
-              activeTrip.title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            accountEmail: Text(
-              '共 ${activeTrip.landmarks.length} 個自訂地標 • ${activeTrip.description}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.map,
-                  color: Theme.of(context).colorScheme.primary, size: 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(50),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.map, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        activeTrip.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '共 ${activeTrip.landmarks.length} 個地點',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      '可按住右側 ☰ 拖曳排順序',
+                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
 
           // Day Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
                 FilterChip(
@@ -84,9 +132,9 @@ class LandmarkListDrawer extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(),
+          const Divider(height: 1),
 
-          // Landmarks Reorderable List
+          // Landmarks Drag-to-Reorder List
           Expanded(
             child: landmarks.isEmpty
                 ? const Center(
@@ -94,6 +142,7 @@ class LandmarkListDrawer extends StatelessWidget {
                         style: TextStyle(color: Colors.grey)),
                   )
                 : ReorderableListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: landmarks.length,
                     onReorderItem: (oldIndex, newIndex) {
                       provider.reorderLandmarks(oldIndex, newIndex);
@@ -118,13 +167,17 @@ class LandmarkListDrawer extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: ListTile(
+                              contentPadding: const EdgeInsets.only(
+                                  left: 12, right: 8, top: 4, bottom: 4),
                               leading: CircleAvatar(
+                                radius: 16,
                                 backgroundColor:
-                                    item.category.color.withAlpha(50),
+                                    item.category.color.withAlpha(40),
                                 child: Text(
                                   '${index + 1}',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 12,
                                     color: item.category.color,
                                   ),
                                 ),
@@ -138,7 +191,9 @@ class LandmarkListDrawer extends StatelessWidget {
                                     child: Text(
                                       item.name,
                                       style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -165,16 +220,26 @@ class LandmarkListDrawer extends StatelessWidget {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.navigation,
-                                        color: Colors.blue, size: 20),
+                                        color: Colors.blue, size: 18),
                                     tooltip: '開啟 Google 地圖導航',
                                     onPressed: () =>
                                         _openGoogleMapsNavigation(item),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline,
-                                        color: Colors.grey, size: 20),
+                                        color: Colors.grey, size: 18),
                                     onPressed: () =>
                                         provider.deleteLandmark(item.id),
+                                  ),
+                                  // Drag Handle to Reorder
+                                  ReorderableDragStartListener(
+                                    index: index,
+                                    child: const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 4.0),
+                                      child: Icon(Icons.drag_handle,
+                                          color: Colors.grey),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -184,20 +249,20 @@ class LandmarkListDrawer extends StatelessWidget {
                               },
                             ),
                           ),
-                          // Relative distance indicator
+                          // Relative distance indicator to next point
                           if (distNext != null)
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(vertical: 2),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.south,
-                                      size: 14, color: Colors.indigo),
-                                  const SizedBox(width: 4),
+                                      size: 12, color: Colors.indigo),
+                                  const SizedBox(width: 2),
                                   Text(
-                                    '相對距離: ${distNext.toStringAsFixed(1)} 公里',
+                                    '下個地點相對距離: ${distNext.toStringAsFixed(1)} 公里',
                                     style: const TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                       color: Colors.indigo,
                                     ),

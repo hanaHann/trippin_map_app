@@ -70,28 +70,16 @@ class GoogleMapsParser {
         final finalUrl = response.request?.url.toString() ?? targetUrl;
         final htmlBody = response.body;
 
-        // Try extracting coordinates from final redirected URL
-        if (lat == null || lng == null) {
-          final redirectedCoords = _extractCoordinates(finalUrl);
-          if (redirectedCoords != null) {
-            lat = redirectedCoords[0];
-            lng = redirectedCoords[1];
-          }
+        // Try extracting exact pin coordinates from HTML body or redirected URL
+        final bodyCoords = _extractCoordinates(htmlBody) ?? _extractCoordinates(finalUrl);
+        if (bodyCoords != null) {
+          lat = bodyCoords[0];
+          lng = bodyCoords[1];
         }
 
-        // Try extracting coordinates from HTML body
-        if (lat == null || lng == null) {
-          final htmlCoords = _extractCoordinates(htmlBody);
-          if (htmlCoords != null) {
-            lat = htmlCoords[0];
-            lng = htmlCoords[1];
-          }
-        }
-
-        // Try extracting place name from redirected URL path
+        // Try extracting place name from redirected URL path or HTML body
         extractedName ??= _extractNameFromUrl(finalUrl);
-
-        // Try extracting place name from HTML meta/title tags
+        extractedName ??= _extractNameFromUrl(htmlBody);
         extractedName ??= _extractNameFromHtml(htmlBody);
       } catch (e) {
         // Continue fallback if HTTP fails
@@ -109,20 +97,23 @@ class GoogleMapsParser {
       } catch (_) {}
     }
 
-    // 6. If we have coordinates, resolve place name (reverse geocode if name is still missing or generic)
+    // 6. If we have coordinates, resolve place name (reverse geocode if name is missing, English, or generic)
     if (lat != null && lng != null) {
       if (extractedName == null ||
           extractedName.isEmpty ||
           extractedName == 'Google 地圖' ||
           extractedName == 'Google Maps' ||
           extractedName.startsWith('自訂地點') ||
-          extractedName.startsWith('自訂定位點')) {
-        extractedName = await _reverseGeocode(lat, lng) ??
-            '自訂地點 (${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)})';
+          extractedName.startsWith('自訂定位點') ||
+          RegExp(r'^[a-zA-Z0-9\s,\+\-]+$').hasMatch(extractedName)) {
+        final geocodedName = await _reverseGeocode(lat, lng);
+        if (geocodedName != null && geocodedName.isNotEmpty) {
+          extractedName = geocodedName;
+        }
       }
 
       return ParsedLocationResult(
-        name: extractedName,
+        name: extractedName ?? '自訂地點 (${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)})',
         latitude: lat,
         longitude: lng,
       );
@@ -133,43 +124,43 @@ class GoogleMapsParser {
 
   /// Extracts [lat, lng] using 5 Google Maps coordinate patterns
   static List<double>? _extractCoordinates(String str) {
-    // Pattern 1: @35.6268,139.7766
-    final p1 = RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(str);
-    if (p1 != null) {
-      final lat = double.tryParse(p1.group(1)!);
-      final lng = double.tryParse(p1.group(2)!);
+    // Pattern 1: Exact pin !3d35.6311555!4d139.7787019 or !3d35.6311555\x214d139.7787019
+    final pExactPin = RegExp(r'!3d(-?\d+\.\d+)(?:!|\\x21)4d(-?\d+\.\d+)').firstMatch(str);
+    if (pExactPin != null) {
+      final lat = double.tryParse(pExactPin.group(1)!);
+      final lng = double.tryParse(pExactPin.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
-    // Pattern 2: !3d35.6268!4d139.7766 (Google Maps internal data format)
-    final p2 = RegExp(r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)').firstMatch(str);
-    if (p2 != null) {
-      final lat = double.tryParse(p2.group(1)!);
-      final lng = double.tryParse(p2.group(2)!);
+    // Pattern 2: Viewport center @35.6268,139.7766
+    final pAt = RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(str);
+    if (pAt != null) {
+      final lat = double.tryParse(pAt.group(1)!);
+      final lng = double.tryParse(pAt.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
     // Pattern 3: center=35.6268%2C139.7766 or center=35.6268,139.7766
-    final p3 = RegExp(r'center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
-    if (p3 != null) {
-      final lat = double.tryParse(p3.group(1)!);
-      final lng = double.tryParse(p3.group(2)!);
+    final pCenter = RegExp(r'center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
+    if (pCenter != null) {
+      final lat = double.tryParse(pCenter.group(1)!);
+      final lng = double.tryParse(pCenter.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
-    // Pattern 4: q=35.6268,139.7766 or ll=35.6268,139.7766 or query=35.6268,139.7766
-    final p4 = RegExp(r'(?:q|ll|query)=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
-    if (p4 != null) {
-      final lat = double.tryParse(p4.group(1)!);
-      final lng = double.tryParse(p4.group(2)!);
+    // Pattern 4: q=35.6268,139.7766 or ll=35.6268,139.7766
+    final pQ = RegExp(r'(?:q|ll|query)=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
+    if (pQ != null) {
+      final lat = double.tryParse(pQ.group(1)!);
+      final lng = double.tryParse(pQ.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
     // Pattern 5: Raw 35.6268, 139.7766
-    final p5 = RegExp(r'(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})').firstMatch(str);
-    if (p5 != null) {
-      final lat = double.tryParse(p5.group(1)!);
-      final lng = double.tryParse(p5.group(2)!);
+    final pRaw = RegExp(r'(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})').firstMatch(str);
+    if (pRaw != null) {
+      final lat = double.tryParse(pRaw.group(1)!);
+      final lng = double.tryParse(pRaw.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
@@ -179,14 +170,15 @@ class GoogleMapsParser {
   /// Extracts place name from Google Maps URL path (/maps/place/台場/ or /search/台場/ or ?q=台場)
   static String? _extractNameFromUrl(String url) {
     // Match /maps/place/PLACE_NAME/ or /maps/search/PLACE_NAME/
-    final placeMatch = RegExp(r'/maps/(?:place|search)/([^/@?]+)').firstMatch(url);
+    final placeMatch = RegExp(r'/maps/(?:place|search)/([^/@?\x26"]+)').firstMatch(url);
     if (placeMatch != null) {
       final raw = placeMatch.group(1)!.replaceAll('+', ' ');
       final decoded = Uri.decodeFull(raw).trim();
-      if (decoded.isNotEmpty &&
-          !decoded.startsWith('http') &&
-          !RegExp(r'^-?\d+\.').hasMatch(decoded)) {
-        return decoded;
+      final firstSegment = decoded.split(',').first.trim();
+      if (firstSegment.isNotEmpty &&
+          !firstSegment.startsWith('http') &&
+          !RegExp(r'^-?\d+\.').hasMatch(firstSegment)) {
+        return firstSegment;
       }
     }
 
@@ -195,9 +187,10 @@ class GoogleMapsParser {
     if (qMatch != null) {
       final raw = qMatch.group(1)!.replaceAll('+', ' ');
       final decoded = Uri.decodeFull(raw).trim();
-      if (decoded.isNotEmpty &&
-          !RegExp(r'^-?\d+\.\d+(?:%2C|,)\s*-?\d+\.\d+$').hasMatch(decoded)) {
-        return decoded;
+      final firstSegment = decoded.split(',').first.trim();
+      if (firstSegment.isNotEmpty &&
+          !RegExp(r'^-?\d+\.\d+(?:%2C|,)\s*-?\d+\.\d+$').hasMatch(firstSegment)) {
+        return firstSegment;
       }
     }
 
@@ -233,7 +226,7 @@ class GoogleMapsParser {
     return null;
   }
 
-  /// Reverse geocodes coordinates to a place name (e.g. "台場") via Nominatim
+  /// Reverse geocodes coordinates to a place name (e.g. "台場一丁目" / "台場") via Nominatim
   static Future<String?> _reverseGeocode(double lat, double lng) async {
     try {
       final url = Uri.parse(
@@ -245,14 +238,12 @@ class GoogleMapsParser {
       );
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-        final name = data['name'] as String?;
-        if (name != null && name.isNotEmpty) return name;
-
         final address = data['address'] as Map<String, dynamic>?;
+
         if (address != null) {
-          final candidate = address['suburb'] ??
-              address['neighbourhood'] ??
+          final candidate = address['neighbourhood'] ??
               address['quarter'] ??
+              address['suburb'] ??
               address['tourism'] ??
               address['amenity'] ??
               address['attraction'] ??
@@ -268,9 +259,13 @@ class GoogleMapsParser {
           }
         }
 
+        final name = data['name'] as String?;
+        if (name != null && name.isNotEmpty) return name;
+
         final displayName = data['display_name'] as String?;
         if (displayName != null && displayName.isNotEmpty) {
-          return displayName.split(',').first.trim();
+          final firstPart = displayName.split(',').first.trim();
+          if (firstPart.isNotEmpty) return firstPart;
         }
       }
     } catch (_) {}

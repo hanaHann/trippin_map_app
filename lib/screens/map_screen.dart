@@ -133,6 +133,7 @@ class _MapScreenState extends State<MapScreen> {
                 urlTemplate: _getTileUrl(provider.tileStyle),
                 subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'com.hana.trip_pin_app',
+                retinaMode: RetinaMode.isHighDensity(context),
               ),
 
               // Polyline Route Connectors

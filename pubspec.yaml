@@ -43,6 +43,7 @@ dependencies:
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
   google_mobile_ads: ^5.2.0
+  webview_flutter_wkwebview: ^3.26.0
 
 dev_dependencies:
   flutter_test:

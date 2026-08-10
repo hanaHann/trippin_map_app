@@ -6,6 +6,7 @@ import '../models/landmark.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/add_landmark_dialog.dart';
 import '../widgets/landmark_list_drawer.dart';
+import '../widgets/ad_banner_widget.dart';
 import 'trip_list_screen.dart';
 
 class MapScreen extends StatefulWidget {
@@ -333,6 +334,14 @@ class _MapScreenState extends State<MapScreen> {
         label: const Text('新增地標'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+      ),
+      bottomNavigationBar: const SafeArea(
+        child: SizedBox(
+          height: 52,
+          child: Center(
+            child: AdBannerWidget(),
+          ),
+        ),
       ),
     );
   }

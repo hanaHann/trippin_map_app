@@ -151,15 +151,22 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: screenHeight * 0.75,
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Header
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius:
@@ -170,7 +177,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                   const Icon(Icons.add_location_alt_rounded),
                   const SizedBox(width: 8),
                   Text(
-                    '新增自訂旅遊地記點',
+                    '新增自訂旅遊地標',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -187,7 +194,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
             TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(icon: Icon(Icons.link), text: 'Google Maps 連結'),
+                Tab(icon: Icon(Icons.link), text: 'Google 連結'),
                 Tab(icon: Icon(Icons.search), text: '即時搜尋'),
                 Tab(icon: Icon(Icons.edit_location), text: '詳細資料'),
               ],
@@ -197,8 +204,8 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Tab 1: Google Maps Link Parser
-                  Padding(
+                  // Tab 1: Google Maps Link Parser (Wrapped in SingleChildScrollView for Keyboard Safety)
+                  SingleChildScrollView(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,7 +217,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                         const SizedBox(height: 12),
                         TextField(
                           controller: _linkController,
-                          maxLines: 3,
+                          maxLines: 2,
                           decoration: InputDecoration(
                             hintText: '在此貼上 Google 地圖分享網址...',
                             border: OutlineInputBorder(
@@ -239,14 +246,14 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2))
                                 : const Icon(Icons.bolt),
-                            label: const Text('自動解析並開啓資料夾'),
+                            label: const Text('自動解析地點與座標'),
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Tab 2: Keyword Search
+                  // Tab 2: Keyword Search (Scrollable ListView)
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -275,32 +282,42 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                         ),
                         const SizedBox(height: 12),
                         if (_isSearching)
-                          const Center(child: CircularProgressIndicator())
+                          const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: CircularProgressIndicator(),
+                          )
                         else
                           Expanded(
-                            child: ListView.builder(
-                              itemCount: _searchResults.length,
-                              itemBuilder: (context, index) {
-                                final item = _searchResults[index];
-                                return ListTile(
-                                  title: Text(item.displayName.split(',').first,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                  subtitle: Text(item.displayName,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis),
-                                  leading: const Icon(Icons.place,
-                                      color: Colors.redAccent),
-                                  onTap: () => _selectSearchResult(item),
-                                );
-                              },
-                            ),
+                            child: _searchResults.isEmpty
+                                ? const Center(
+                                    child: Text('輸入名稱點擊搜尋',
+                                        style: TextStyle(color: Colors.grey)))
+                                : ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: _searchResults.length,
+                                    itemBuilder: (context, index) {
+                                      final item = _searchResults[index];
+                                      return ListTile(
+                                        dense: true,
+                                        title: Text(
+                                            item.displayName.split(',').first,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold)),
+                                        subtitle: Text(item.displayName,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis),
+                                        leading: const Icon(Icons.place,
+                                            color: Colors.redAccent),
+                                        onTap: () => _selectSearchResult(item),
+                                      );
+                                    },
+                                  ),
                           ),
                       ],
                     ),
                   ),
 
-                  // Tab 3: Detailed Form
+                  // Tab 3: Detailed Form (Wrapped in SingleChildScrollView)
                   SingleChildScrollView(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -331,8 +348,10 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                     child: Row(
                                       children: [
                                         Text(cat.iconSymbol),
-                                        const SizedBox(width: 8),
-                                        Text(cat.displayName),
+                                        const SizedBox(width: 6),
+                                        Text(cat.displayName,
+                                            style:
+                                                const TextStyle(fontSize: 13)),
                                       ],
                                     ),
                                   );
@@ -344,7 +363,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                 },
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: DropdownButtonFormField<int>(
                                 initialValue: _selectedDay,
@@ -373,32 +392,32 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                           children: [
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   _selectedLat != null
-                                      ? '緯度: ${_selectedLat!.toStringAsFixed(5)}'
+                                      ? '緯度: ${_selectedLat!.toStringAsFixed(4)}'
                                       : '尚未選取座標',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: const TextStyle(fontSize: 11),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.all(12),
+                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   _selectedLng != null
-                                      ? '經度: ${_selectedLng!.toStringAsFixed(5)}'
+                                      ? '經度: ${_selectedLng!.toStringAsFixed(4)}'
                                       : '尚未選取座標',
-                                  style: const TextStyle(fontSize: 12),
+                                  style: const TextStyle(fontSize: 11),
                                 ),
                               ),
                             ),

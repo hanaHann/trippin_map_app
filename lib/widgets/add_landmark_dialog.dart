@@ -1,0 +1,437 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/landmark.dart';
+import '../providers/trip_provider.dart';
+import '../services/google_maps_parser.dart';
+import '../services/nominatim_service.dart';
+
+class AddLandmarkDialog extends StatefulWidget {
+  final double? initialLat;
+  final double? initialLng;
+
+  const AddLandmarkDialog({super.key, this.initialLat, this.initialLng});
+
+  @override
+  State<AddLandmarkDialog> createState() => _AddLandmarkDialogState();
+}
+
+class _AddLandmarkDialogState extends State<AddLandmarkDialog>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  // Tab 1: Google Maps Link Parser
+  final _linkController = TextEditingController();
+  bool _isParsingLink = false;
+  String? _parseError;
+
+  // Tab 2: Keyword Search
+  final _searchController = TextEditingController();
+  List<SearchPlaceResult> _searchResults = [];
+  bool _isSearching = false;
+
+  // Form Fields
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _notesController = TextEditingController();
+  double? _selectedLat;
+  double? _selectedLng;
+  LandmarkCategory _selectedCategory = LandmarkCategory.attraction;
+  int _selectedDay = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+
+    if (widget.initialLat != null && widget.initialLng != null) {
+      _selectedLat = widget.initialLat;
+      _selectedLng = widget.initialLng;
+      _nameController.text = '地圖定位點';
+      _tabController.index = 2; // Default to Manual/Picked tab
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _linkController.dispose();
+    _searchController.dispose();
+    _nameController.dispose();
+    _addressController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleParseLink() async {
+    setState(() {
+      _isParsingLink = true;
+      _parseError = null;
+    });
+
+    final result = await GoogleMapsParser.parseInput(_linkController.text);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isParsingLink = false;
+    });
+
+    if (result != null) {
+      setState(() {
+        _nameController.text = result.name;
+        _selectedLat = result.latitude;
+        _selectedLng = result.longitude;
+        _tabController.animateTo(2); // Jump to Form Tab
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('成功解析 Google 地圖連結經緯度與名稱！')),
+      );
+    } else {
+      setState(() {
+        _parseError = '無法解析此連結或經緯度格式，請確認網址或使用關鍵字搜尋。';
+      });
+    }
+  }
+
+  Future<void> _handleSearch() async {
+    if (_searchController.text.trim().isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    final results =
+        await NominatimService.searchPlaces(_searchController.text);
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchResults = results;
+      _isSearching = false;
+    });
+  }
+
+  void _selectSearchResult(SearchPlaceResult result) {
+    setState(() {
+      _nameController.text = result.displayName.split(',').first;
+      _addressController.text = result.displayName;
+      _selectedLat = result.latitude;
+      _selectedLng = result.longitude;
+      _tabController.animateTo(2); // Jump to Form
+    });
+  }
+
+  void _submitForm() {
+    if (_nameController.text.trim().isEmpty ||
+        _selectedLat == null ||
+        _selectedLng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('請填寫地點名稱並確認經緯度！')),
+      );
+      return;
+    }
+
+    final newLandmark = Landmark(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: _nameController.text.trim(),
+      latitude: _selectedLat!,
+      longitude: _selectedLng!,
+      category: _selectedCategory,
+      address: _addressController.text.trim(),
+      notes: _notesController.text.trim(),
+      day: _selectedDay,
+    );
+
+    context.read<TripProvider>().addLandmark(newLandmark);
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已成功新增「${newLandmark.name}」到行程！')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.add_location_alt_rounded),
+                  const SizedBox(width: 8),
+                  Text(
+                    '新增自訂旅遊地記點',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            // Tab Bar
+            TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(icon: Icon(Icons.link), text: 'Google Maps 連結'),
+                Tab(icon: Icon(Icons.search), text: '即時搜尋'),
+                Tab(icon: Icon(Icons.edit_location), text: '詳細資料'),
+              ],
+            ),
+            // Tab Content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Tab 1: Google Maps Link Parser
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '請貼上 Google 地圖分享連結或經緯度 (例如: @35.6812,139.7671 或 https://maps.app.goo.gl/...)',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _linkController,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: '在此貼上 Google 地圖分享網址...',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => _linkController.clear(),
+                            ),
+                          ),
+                        ),
+                        if (_parseError != null) ...[
+                          const SizedBox(height: 8),
+                          Text(_parseError!,
+                              style: const TextStyle(color: Colors.red)),
+                        ],
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                _isParsingLink ? null : _handleParseLink,
+                            icon: _isParsingLink
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
+                                : const Icon(Icons.bolt),
+                            label: const Text('自動解析並開啓資料夾'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Tab 2: Keyword Search
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                decoration: InputDecoration(
+                                  hintText: '輸入景點、餐廳或地址名稱...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onSubmitted: (_) => _handleSearch(),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: _isSearching ? null : _handleSearch,
+                              child: const Text('搜尋'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_isSearching)
+                          const Center(child: CircularProgressIndicator())
+                        else
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: _searchResults.length,
+                              itemBuilder: (context, index) {
+                                final item = _searchResults[index];
+                                return ListTile(
+                                  title: Text(item.displayName.split(',').first,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                  subtitle: Text(item.displayName,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis),
+                                  leading: const Icon(Icons.place,
+                                      color: Colors.redAccent),
+                                  onTap: () => _selectSearchResult(item),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Tab 3: Detailed Form
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: '地點名稱 *',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<LandmarkCategory>(
+                                initialValue: _selectedCategory,
+                                decoration: InputDecoration(
+                                  labelText: '分類標籤',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: LandmarkCategory.values.map((cat) {
+                                  return DropdownMenuItem(
+                                    value: cat,
+                                    child: Row(
+                                      children: [
+                                        Text(cat.iconSymbol),
+                                        const SizedBox(width: 8),
+                                        Text(cat.displayName),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedCategory = val);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<int>(
+                                initialValue: _selectedDay,
+                                decoration: InputDecoration(
+                                  labelText: '行程天數',
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: List.generate(10, (i) => i + 1)
+                                    .map((d) => DropdownMenuItem(
+                                          value: d,
+                                          child: Text('第 $d 天'),
+                                        ))
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedDay = val);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _selectedLat != null
+                                      ? '緯度: ${_selectedLat!.toStringAsFixed(5)}'
+                                      : '尚未選取座標',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _selectedLng != null
+                                      ? '經度: ${_selectedLng!.toStringAsFixed(5)}'
+                                      : '尚未選取座標',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _notesController,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: '備註與門票資訊 (選填)',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _submitForm,
+                            icon: const Icon(Icons.check),
+                            label: const Text('儲存並加到地圖'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

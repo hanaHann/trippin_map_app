@@ -1,0 +1,177 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:latlong2/latlong.dart';
+import '../models/trip.dart';
+import '../models/landmark.dart';
+import '../data/sample_data.dart';
+
+enum MapTileStyle {
+  light,
+  dark,
+  osm,
+  satellite,
+}
+
+class TripProvider with ChangeNotifier {
+  List<Trip> _trips = [];
+  String? _activeTripId;
+
+  // Visual Map Controls
+  bool _showPermanentLabels = true;
+  bool _showRouteLines = true;
+  int? _selectedDayFilter;
+  MapTileStyle _tileStyle = MapTileStyle.light;
+
+  TripProvider() {
+    _loadTrips();
+  }
+
+  List<Trip> get trips => _trips;
+  String? get activeTripId => _activeTripId;
+
+  Trip? get activeTrip {
+    if (_trips.isEmpty) return null;
+    return _trips.firstWhere(
+      (t) => t.id == _activeTripId,
+      orElse: () => _trips.first,
+    );
+  }
+
+  bool get showPermanentLabels => _showPermanentLabels;
+  bool get showRouteLines => _showRouteLines;
+  int? get selectedDayFilter => _selectedDayFilter;
+  MapTileStyle get tileStyle => _tileStyle;
+
+  List<Landmark> get currentLandmarks {
+    final trip = activeTrip;
+    if (trip == null) return [];
+    if (_selectedDayFilter == null) return trip.landmarks;
+    return trip.landmarks.where((l) => l.day == _selectedDayFilter).toList();
+  }
+
+  void togglePermanentLabels() {
+    _showPermanentLabels = !_showPermanentLabels;
+    notifyListeners();
+  }
+
+  void toggleRouteLines() {
+    _showRouteLines = !_showRouteLines;
+    notifyListeners();
+  }
+
+  void setSelectedDayFilter(int? day) {
+    _selectedDayFilter = day;
+    notifyListeners();
+  }
+
+  void setTileStyle(MapTileStyle style) {
+    _tileStyle = style;
+    notifyListeners();
+  }
+
+  void setActiveTrip(String tripId) {
+    _activeTripId = tripId;
+    _selectedDayFilter = null;
+    notifyListeners();
+    _saveToPrefs();
+  }
+
+  void addTrip(String title, String description) {
+    final newTrip = Trip(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      description: description,
+      landmarks: [],
+    );
+    _trips.add(newTrip);
+    _activeTripId = newTrip.id;
+    notifyListeners();
+    _saveToPrefs();
+  }
+
+  void deleteTrip(String tripId) {
+    _trips.removeWhere((t) => t.id == tripId);
+    if (_activeTripId == tripId) {
+      _activeTripId = _trips.isNotEmpty ? _trips.first.id : null;
+    }
+    notifyListeners();
+    _saveToPrefs();
+  }
+
+  void addLandmark(Landmark landmark) {
+    final trip = activeTrip;
+    if (trip == null) return;
+
+    final updatedLandmarks = List<Landmark>.from(trip.landmarks)..add(landmark);
+    _updateActiveTripLandmarks(updatedLandmarks);
+  }
+
+  void deleteLandmark(String landmarkId) {
+    final trip = activeTrip;
+    if (trip == null) return;
+
+    final updatedLandmarks = List<Landmark>.from(trip.landmarks)
+      ..removeWhere((l) => l.id == landmarkId);
+    _updateActiveTripLandmarks(updatedLandmarks);
+  }
+
+  void reorderLandmarks(int oldIndex, int newIndex) {
+    final trip = activeTrip;
+    if (trip == null) return;
+
+    if (newIndex > oldIndex) newIndex -= 1;
+    final landmarks = List<Landmark>.from(trip.landmarks);
+    final item = landmarks.removeAt(oldIndex);
+    landmarks.insert(newIndex, item);
+
+    _updateActiveTripLandmarks(landmarks);
+  }
+
+  void _updateActiveTripLandmarks(List<Landmark> newLandmarks) {
+    final index = _trips.indexWhere((t) => t.id == _activeTripId);
+    if (index != -1) {
+      _trips[index] = _trips[index].copyWith(landmarks: newLandmarks);
+      notifyListeners();
+      _saveToPrefs();
+    }
+  }
+
+  Future<void> _loadTrips() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? tripsJson = prefs.getString('saved_trips');
+
+    if (tripsJson != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(tripsJson);
+        _trips = decoded.map((item) => Trip.fromJson(item)).toList();
+        _activeTripId = prefs.getString('active_trip_id');
+      } catch (e) {
+        _trips = sampleTrips;
+      }
+    } else {
+      _trips = sampleTrips;
+    }
+
+    if (_trips.isNotEmpty && (_activeTripId == null || !_trips.any((t) => t.id == _activeTripId))) {
+      _activeTripId = _trips.first.id;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _saveToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = _trips.map((t) => t.toJson()).toList();
+    await prefs.setString('saved_trips', jsonEncode(jsonList));
+    if (_activeTripId != null) {
+      await prefs.setString('active_trip_id', _activeTripId!);
+    }
+  }
+
+  // Calculate Haversine distance between two points in km
+  double calculateDistanceKm(LatLng p1, LatLng p2) {
+    const Distance distance = Distance();
+    return distance.as(LengthUnit.Kilometer, p1, p2);
+  }
+}

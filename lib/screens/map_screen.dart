@@ -310,8 +310,6 @@ class _MapScreenState extends State<MapScreen> {
 
   String _getTileUrl(MapTileStyle style) {
     switch (style) {
-      case MapTileStyle.pastelPink:
-        return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.macaronCream:
         return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.light:
@@ -336,14 +334,9 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context) {
         final styles = [
           {
-            'style': MapTileStyle.pastelPink,
-            'label': '夢幻粉彩',
-            'desc': '夢幻櫻花粉紅與柔粉玫瑰色調'
-          },
-          {
             'style': MapTileStyle.macaronCream,
-            'label': '暖色奶茶',
-            'desc': '溫暖奶茶手帳無字色調'
+            'label': '低調灰白',
+            'desc': '極簡灰白無字質感色調'
           },
           {
             'style': MapTileStyle.light,
@@ -548,19 +541,6 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.hana.trip_pin_app',
                   retinaMode: RetinaMode.isHighDensity(context),
-                  tileBuilder: provider.tileStyle == MapTileStyle.pastelPink
-                      ? (context, tileWidget, tile) {
-                          return ColorFiltered(
-                            colorFilter: const ColorFilter.matrix(<double>[
-                              1.15, 0.10, 0.15, 0, 40,
-                              0.35, 0.75, 0.20, 0, 10,
-                              0.45, 0.25, 0.80, 0, 25,
-                              0, 0, 0, 1, 0,
-                            ]),
-                            child: tileWidget,
-                          );
-                        }
-                      : null,
                 ),
 
                 // Polyline Route Connectors & Waypoint Dots

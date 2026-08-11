@@ -7,9 +7,8 @@ import '../models/landmark.dart';
 import '../data/sample_data.dart';
 
 enum MapTileStyle {
-  light,
-  pastelPink,
   macaronCream,
+  light,
   dark,
   osm,
   satellite,

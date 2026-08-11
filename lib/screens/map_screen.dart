@@ -305,7 +305,7 @@ class _MapScreenState extends State<MapScreen> {
   String _getTileUrl(MapTileStyle style) {
     switch (style) {
       case MapTileStyle.pastelPink:
-        return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png';
+        return 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
       case MapTileStyle.macaronCream:
         return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.light:
@@ -317,6 +317,118 @@ class _MapScreenState extends State<MapScreen> {
       case MapTileStyle.osm:
         return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     }
+  }
+
+  void _showTileStyleBottomSheet(
+      BuildContext context, TripProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final styles = [
+          {
+            'style': MapTileStyle.pastelPink,
+            'label': '🌸 夢幻粉彩',
+            'desc': '柔和粉紅與珊瑚暖海配色'
+          },
+          {
+            'style': MapTileStyle.macaronCream,
+            'label': '🍵 暖色奶茶',
+            'desc': '溫暖奶茶手帳無字色調'
+          },
+          {
+            'style': MapTileStyle.light,
+            'label': '✨ 經典馬卡龍',
+            'desc': 'CartoDB 經典 Voyager 地圖'
+          },
+          {
+            'style': MapTileStyle.dark,
+            'label': '🌙 霓虹暗黑',
+            'desc': '夜間高對比風格'
+          },
+          {
+            'style': MapTileStyle.osm,
+            'label': '🗺️ 經典地圖',
+            'desc': 'OpenStreetMap 傳統樣式'
+          },
+          {
+            'style': MapTileStyle.satellite,
+            'label': '🛰️ 衛星地圖',
+            'desc': '高清實景衛星圖'
+          },
+        ];
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.layers_rounded, color: Colors.indigo),
+                  const SizedBox(width: 8),
+                  Text(
+                    '選擇地圖配色風格',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...styles.map((item) {
+                final MapTileStyle style = item['style'] as MapTileStyle;
+                final String label = item['label'] as String;
+                final String desc = item['desc'] as String;
+                final bool isSelected = provider.tileStyle == style;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.indigo.withAlpha(20)
+                        : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected ? Colors.indigo : Colors.grey.shade300,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 4),
+                    title: Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? Colors.indigo : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+                    trailing: isSelected
+                        ? const Icon(Icons.check_circle, color: Colors.indigo)
+                        : null,
+                    onTap: () {
+                      provider.setTileStyle(style);
+                      Navigator.pop(context);
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -354,17 +466,6 @@ class _MapScreenState extends State<MapScreen> {
             icon: const Icon(Icons.camera_alt_rounded, color: Colors.pinkAccent),
             tooltip: '導出/分享可愛地圖圖片',
             onPressed: () => _exportAndShareMapImage(context, activeTrip),
-          ),
-          IconButton(
-            icon: Transform.rotate(
-              angle: -_currentRotation * (math.pi / 180),
-              child: Icon(
-                Icons.explore,
-                color: _currentRotation.abs() > 0.5 ? Colors.redAccent : null,
-              ),
-            ),
-            tooltip: '指北針回正',
-            onPressed: _resetCompassNorth,
           ),
           IconButton(
             icon: const Icon(Icons.center_focus_strong),
@@ -616,39 +717,14 @@ class _MapScreenState extends State<MapScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Card(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    child: DropdownButton<MapTileStyle>(
-                      value: provider.tileStyle,
-                      underline: const SizedBox(),
-                      icon: const Icon(Icons.layers, size: 20),
-                      items: const [
-                        DropdownMenuItem(
-                            value: MapTileStyle.pastelPink,
-                            child: Text('🌸 夢幻馬卡龍 (粉彩無字)')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.macaronCream,
-                            child: Text('🍵 暖色手帳 (奶茶無字)')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.light,
-                            child: Text('✨ 經典馬卡龍 (Voyager)')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.dark, child: Text('🌙 霓虹暗黑')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.osm, child: Text('🗺️ 經典地圖')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.satellite,
-                            child: Text('🛰️ 衛星地圖')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) provider.setTileStyle(val);
-                      },
-                    ),
-                  ),
+                // Icon Only Map Tile Selector Button
+                FloatingActionButton.small(
+                  heroTag: 'btn_tile_style',
+                  tooltip: '選擇地圖配色',
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.indigo,
+                  onPressed: () => _showTileStyleBottomSheet(context, provider),
+                  child: const Icon(Icons.layers_rounded),
                 ),
                 const SizedBox(height: 8),
                 FloatingActionButton.small(

@@ -1,10 +1,17 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/landmark.dart';
+import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/add_landmark_dialog.dart';
 import '../widgets/landmark_list_drawer.dart';
@@ -35,6 +42,210 @@ class _MapScreenState extends State<MapScreen> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  final GlobalKey _repaintKey = GlobalKey();
+
+  Future<void> _exportAndShareMapImage(
+      BuildContext context, Trip? activeTrip) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('✨ 正在生成可愛地圖高清圖片...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      final RenderRepaintBoundary? boundary = _repaintKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
+
+      if (boundary == null) {
+        if (context.mounted) Navigator.pop(context);
+        return;
+      }
+
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+
+      if (!context.mounted) return;
+      Navigator.pop(context);
+
+      if (byteData == null) return;
+      final Uint8List pngBytes = byteData.buffer.asUint8List();
+
+      final tempDir = await getTemporaryDirectory();
+      final String tripTitleClean = activeTrip?.title
+              .replaceAll(RegExp(r'[^\w\s\u4e00-\u9fa5]'), '_') ??
+          'cute_map';
+      final filePath =
+          '${tempDir.path}/${tripTitleClean}_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(filePath);
+      await file.writeAsBytes(pngBytes);
+
+      if (!context.mounted) return;
+
+      _showExportPreviewDialog(context, file, activeTrip);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('導出圖片時發生錯誤: $e')),
+        );
+      }
+    }
+  }
+
+  void _showExportPreviewDialog(
+      BuildContext context, File imageFile, Trip? activeTrip) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            constraints: const BoxConstraints(maxWidth: 480, maxHeight: 600),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.stars_rounded,
+                        color: Colors.amber, size: 24),
+                    const SizedBox(width: 8),
+                    Text(
+                      '✨ 可愛地圖導出與分享',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Colors.indigo.withAlpha(50), width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
+                        )
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.file(imageFile, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withAlpha(20),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.collections_bookmark_rounded,
+                          size: 14, color: Colors.indigo),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '${activeTrip?.title ?? "我的可愛地圖"} · ${activeTrip?.landmarks.length ?? 0} 個地點',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.indigo,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('🎉 可愛地圖圖片已成功生成並儲存！')),
+                          );
+                        },
+                        icon: const Icon(Icons.check_circle_outline_rounded),
+                        label: const Text('已儲存圖片'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // ignore: deprecated_member_use
+                          await Share.shareXFiles(
+                            [XFile(imageFile.path)],
+                            text:
+                                '✨ 這是我的可愛旅遊地圖「${activeTrip?.title ?? "分享地圖"}」！歡迎一起探索~ 🗺️',
+                          );
+                        },
+                        icon: const Icon(Icons.share_rounded,
+                            color: Colors.white),
+                        label: const Text('一鍵分享圖片',
+                            style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _resetCompassNorth() {
@@ -136,6 +347,11 @@ class _MapScreenState extends State<MapScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.camera_alt_rounded, color: Colors.pinkAccent),
+            tooltip: '導出/分享可愛地圖圖片',
+            onPressed: () => _exportAndShareMapImage(context, activeTrip),
+          ),
+          IconButton(
             icon: Transform.rotate(
               angle: -_currentRotation * (math.pi / 180),
               child: Icon(
@@ -174,290 +390,350 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // FlutterMap Tile Engine
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: initialCenter,
-              initialZoom: 12.0,
-              onPositionChanged: (camera, hasGesture) {
-                if ((camera.rotation - _currentRotation).abs() > 0.1) {
-                  setState(() {
-                    _currentRotation = camera.rotation;
-                  });
-                }
-              },
-              onTap: (tapPosition, point) {
-                _showAddDialog(lat: point.latitude, lng: point.longitude);
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: _getTileUrl(provider.tileStyle),
-                subdomains: const ['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.hana.trip_pin_app',
-                retinaMode: RetinaMode.isHighDensity(context),
+      body: RepaintBoundary(
+        key: _repaintKey,
+        child: Stack(
+          children: [
+            // FlutterMap Tile Engine
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: initialCenter,
+                initialZoom: 12.0,
+                onPositionChanged: (camera, hasGesture) {
+                  if ((camera.rotation - _currentRotation).abs() > 0.1) {
+                    setState(() {
+                      _currentRotation = camera.rotation;
+                    });
+                  }
+                },
+                onTap: (tapPosition, point) {
+                  _showAddDialog(lat: point.latitude, lng: point.longitude);
+                },
               ),
-
-              // Polyline Route Connectors & Waypoint Dots
-              if (provider.showRouteLines && landmarks.length > 1) ...[
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: landmarks.map((l) => l.location).toList(),
-                      color: Colors.indigo.withAlpha(200),
-                      strokeWidth: 4.0,
-                    ),
-                  ],
+              children: [
+                TileLayer(
+                  urlTemplate: _getTileUrl(provider.tileStyle),
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  userAgentPackageName: 'com.hana.trip_pin_app',
+                  retinaMode: RetinaMode.isHighDensity(context),
                 ),
-                CircleLayer(
-                  circles: [
-                    // Intermediate route segment dots
-                    ..._generateRouteDots(landmarks).map(
-                      (point) => CircleMarker(
-                        point: point,
-                        radius: 3.5,
-                        color: Colors.indigoAccent,
-                        borderColor: Colors.white,
-                        borderStrokeWidth: 1.5,
-                      ),
-                    ),
-                    // Landmark vertex dots
-                    ...landmarks.map(
-                      (l) => CircleMarker(
-                        point: l.location,
-                        radius: 6.5,
-                        color: Colors.indigo,
-                        borderColor: Colors.white,
-                        borderStrokeWidth: 2.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
 
-              // Custom Pin Markers with Always-Visible Permanent Labels
-              MarkerLayer(
-                markers: landmarks.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final landmark = entry.value;
+                // Polyline Route Connectors & Waypoint Dots
+                if (provider.showRouteLines && landmarks.length > 1) ...[
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: landmarks.map((l) => l.location).toList(),
+                        color: Colors.indigo.withAlpha(200),
+                        strokeWidth: 4.0,
+                      ),
+                    ],
+                  ),
+                  CircleLayer(
+                    circles: [
+                      // Intermediate route segment dots
+                      ..._generateRouteDots(landmarks).map(
+                        (point) => CircleMarker(
+                          point: point,
+                          radius: 3.5,
+                          color: Colors.indigoAccent,
+                          borderColor: Colors.white,
+                          borderStrokeWidth: 1.5,
+                        ),
+                      ),
+                      // Landmark vertex dots
+                      ...landmarks.map(
+                        (l) => CircleMarker(
+                          point: l.location,
+                          radius: 6.5,
+                          color: Colors.indigo,
+                          borderColor: Colors.white,
+                          borderStrokeWidth: 2.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
 
-                  return Marker(
-                    point: landmark.location,
-                    width: 220,
-                    height: 100,
-                    alignment: Alignment.topCenter,
-                    child: GestureDetector(
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (context) => Container(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(landmark.category.iconSymbol,
-                                        style: const TextStyle(fontSize: 24)),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        landmark.name,
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
+                // Custom Pin Markers with Always-Visible Permanent Labels
+                MarkerLayer(
+                  markers: landmarks.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final landmark = entry.value;
+
+                    return Marker(
+                      point: landmark.location,
+                      width: 220,
+                      height: 100,
+                      alignment: Alignment.topCenter,
+                      child: GestureDetector(
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            builder: (context) => Container(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(landmark.category.iconSymbol,
+                                          style: const TextStyle(fontSize: 20)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          landmark.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text('📍 地址: ${landmark.address.isNotEmpty ? landmark.address : "暫無"}'),
-                                const SizedBox(height: 4),
-                                Text('💡 筆記: ${landmark.notes.isNotEmpty ? landmark.notes : "無備註"}'),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                      '📍 地址: ${landmark.address.isNotEmpty ? landmark.address : "無系統地址"}'),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                      '💡 筆記: ${landmark.notes.isNotEmpty ? landmark.notes : "無備註"}'),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            _openGoogleMapsNavigation(landmark);
+                                          },
+                                          icon: const Icon(Icons.navigation,
+                                              color: Colors.white),
+                                          label: const Text('開啟 Google 地圖景點'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
                                         onPressed: () {
-                                          _openGoogleMapsNavigation(landmark);
+                                          Navigator.pop(context);
+                                          provider.deleteLandmark(landmark.id);
                                         },
-                                        icon: const Icon(Icons.navigation,
-                                            color: Colors.white),
-                                        label: const Text('開啟 Google 地圖景點'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue,
-                                          foregroundColor: Colors.white,
-                                        ),
+                                        icon: const Icon(Icons.delete_outline,
+                                            color: Colors.red),
+                                        tooltip: '刪除此地標',
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        provider.deleteLandmark(landmark.id);
-                                      },
-                                      icon: const Icon(Icons.delete_outline,
-                                          color: Colors.red),
-                                      tooltip: '刪除此地標',
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Permanent Visible Label Badge (Solves Google Maps pain point)
-                          if (provider.showPermanentLabels)
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 210),
-                              child: Container(
+                          );
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Permanent Label Badge
+                            if (provider.showPermanentLabels)
+                              Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.white.withAlpha(240),
+                                  borderRadius: BorderRadius.circular(8),
                                   boxShadow: const [
                                     BoxShadow(
                                       color: Colors.black26,
                                       blurRadius: 4,
                                       offset: Offset(0, 2),
-                                    )
+                                    ),
                                   ],
                                   border: Border.all(
                                     color: landmark.category.color,
                                     width: 1.5,
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 9,
-                                      backgroundColor: landmark.category.color,
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: const TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Flexible(
-                                      child: Text(
-                                        landmark.name,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                          height: 1.25,
-                                        ),
-                                        softWrap: true,
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                                constraints: const BoxConstraints(maxWidth: 210),
+                                child: Text(
+                                  landmark.name,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                  maxLines: 3,
+                                  softWrap: true,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+
+                            // Map Pin Icon Badge
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: landmark.category.color,
+                                shape: BoxShape.circle,
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black38,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
-                          const SizedBox(height: 2),
-                          // Pin Icon
-                          Icon(
-                            Icons.location_on,
-                            size: 28,
-                            color: landmark.category.color,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-
-          // Tile Style & Floating Controls (Zoom + Compass Reset)
-          Positioned(
-            top: 16,
-            right: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Card(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: DropdownButton<MapTileStyle>(
-                      value: provider.tileStyle,
-                      underline: const SizedBox(),
-                      icon: const Icon(Icons.layers, size: 20),
-                      items: const [
-                        DropdownMenuItem(
-                            value: MapTileStyle.light, child: Text('極簡亮色')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.dark, child: Text('霓虹暗黑')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.osm, child: Text('經典地圖')),
-                        DropdownMenuItem(
-                            value: MapTileStyle.satellite, child: Text('衛星地圖')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) provider.setTileStyle(val);
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton.small(
-                  heroTag: 'btn_compass_reset',
-                  tooltip: '指北針回正',
-                  backgroundColor: _currentRotation.abs() > 0.5
-                      ? Colors.redAccent
-                      : Colors.white,
-                  foregroundColor: _currentRotation.abs() > 0.5
-                      ? Colors.white
-                      : Colors.indigo,
-                  onPressed: _resetCompassNorth,
-                  child: Transform.rotate(
-                    angle: -_currentRotation * (math.pi / 180),
-                    child: const Icon(Icons.explore),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                FloatingActionButton.small(
-                  heroTag: 'btn_zoom_in',
-                  onPressed: () {
-                    final zoom = _mapController.camera.zoom + 1.0;
-                    _mapController.move(_mapController.camera.center, zoom);
-                  },
-                  child: const Icon(Icons.add),
-                ),
-                const SizedBox(height: 6),
-                FloatingActionButton.small(
-                  heroTag: 'btn_zoom_out',
-                  onPressed: () {
-                    final zoom = _mapController.camera.zoom - 1.0;
-                    _mapController.move(_mapController.camera.center, zoom);
-                  },
-                  child: const Icon(Icons.remove),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
-          ),
-        ],
+
+            // Cute Top Title Tag Overlay (Included in Captured Map)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(225),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.stars_rounded,
+                        color: Colors.amber, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      activeTrip?.title ?? '我的可愛地圖',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Bottom Right Watermark Tag (Included in Captured Map)
+            Positioned(
+              bottom: 60,
+              right: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(140),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'MapMap 🗺️ 可愛的常駐標籤地圖',
+                  style: TextStyle(color: Colors.white70, fontSize: 10),
+                ),
+              ),
+            ),
+
+            // Tile Style & Floating Controls (Zoom + Compass Reset)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Card(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: DropdownButton<MapTileStyle>(
+                        value: provider.tileStyle,
+                        underline: const SizedBox(),
+                        icon: const Icon(Icons.layers, size: 20),
+                        items: const [
+                          DropdownMenuItem(
+                              value: MapTileStyle.light, child: Text('極簡亮色')),
+                          DropdownMenuItem(
+                              value: MapTileStyle.dark, child: Text('霓虹暗黑')),
+                          DropdownMenuItem(
+                              value: MapTileStyle.osm, child: Text('經典地圖')),
+                          DropdownMenuItem(
+                              value: MapTileStyle.satellite,
+                              child: Text('衛星地圖')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) provider.setTileStyle(val);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'btn_compass_reset',
+                    tooltip: '指北針回正',
+                    backgroundColor: _currentRotation.abs() > 0.5
+                        ? Colors.redAccent
+                        : Colors.white,
+                    foregroundColor: _currentRotation.abs() > 0.5
+                        ? Colors.white
+                        : Colors.indigo,
+                    onPressed: _resetCompassNorth,
+                    child: Transform.rotate(
+                      angle: -_currentRotation * (math.pi / 180),
+                      child: const Icon(Icons.explore),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  FloatingActionButton.small(
+                    heroTag: 'btn_zoom_in',
+                    onPressed: () {
+                      final zoom = _mapController.camera.zoom + 1.0;
+                      _mapController.move(
+                          _mapController.camera.center, zoom);
+                    },
+                    child: const Icon(Icons.add),
+                  ),
+                  const SizedBox(height: 6),
+                  FloatingActionButton.small(
+                    heroTag: 'btn_zoom_out',
+                    onPressed: () {
+                      final zoom = _mapController.camera.zoom - 1.0;
+                      _mapController.move(
+                          _mapController.camera.center, zoom);
+                    },
+                    child: const Icon(Icons.remove),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
 
       // FAB to Add Landmark

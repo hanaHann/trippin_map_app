@@ -8,8 +8,14 @@ import '../services/nominatim_service.dart';
 class AddLandmarkDialog extends StatefulWidget {
   final double? initialLat;
   final double? initialLng;
+  final int? initialDay;
 
-  const AddLandmarkDialog({super.key, this.initialLat, this.initialLng});
+  const AddLandmarkDialog({
+    super.key,
+    this.initialLat,
+    this.initialLng,
+    this.initialDay,
+  });
 
   @override
   State<AddLandmarkDialog> createState() => _AddLandmarkDialogState();
@@ -42,6 +48,15 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
+    if (widget.initialDay != null) {
+      _selectedDay = widget.initialDay!;
+    } else {
+      final activeFilter = context.read<TripProvider>().selectedDayFilter;
+      if (activeFilter != null) {
+        _selectedDay = activeFilter;
+      }
+    }
 
     if (widget.initialLat != null && widget.initialLng != null) {
       _selectedLat = widget.initialLat;
@@ -365,23 +380,34 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: DropdownButtonFormField<int>(
-                                initialValue: _selectedDay,
-                                decoration: InputDecoration(
-                                  labelText: '行程天數',
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12)),
-                                ),
-                                items: List.generate(10, (i) => i + 1)
-                                    .map((d) => DropdownMenuItem(
-                                          value: d,
-                                          child: Text('第 $d 天'),
-                                        ))
-                                    .toList(),
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() => _selectedDay = val);
-                                  }
+                              child: Builder(
+                                builder: (context) {
+                                  final activeTrip =
+                                      context.watch<TripProvider>().activeTrip;
+                                  final totalDays = activeTrip?.totalDays ?? 5;
+                                  final maxDayOption = _selectedDay > totalDays
+                                      ? _selectedDay
+                                      : totalDays;
+
+                                  return DropdownButtonFormField<int>(
+                                    initialValue: _selectedDay,
+                                    decoration: InputDecoration(
+                                      labelText: '分配天數',
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    items: List.generate(maxDayOption, (i) => i + 1)
+                                        .map((d) => DropdownMenuItem(
+                                              value: d,
+                                              child: Text('第 $d 天'),
+                                            ))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _selectedDay = val);
+                                      }
+                                    },
+                                  );
                                 },
                               ),
                             ),

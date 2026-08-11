@@ -1,7 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/landmark.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/add_landmark_dialog.dart';
@@ -18,6 +20,50 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
+  double _currentRotation = 0.0;
+
+  Future<void> _openGoogleMapsNavigation(Landmark landmark) async {
+    final String name = landmark.name.trim();
+    final String address = landmark.address.trim();
+    final String queryText = name.isNotEmpty
+        ? (address.isNotEmpty ? '$name $address' : name)
+        : '${landmark.latitude},${landmark.longitude}';
+
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryText)}',
+    );
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _resetCompassNorth() {
+    _mapController.rotate(0.0);
+    setState(() {
+      _currentRotation = 0.0;
+    });
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🧭 已將地圖回正至正北方向'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  List<LatLng> _generateRouteDots(List<Landmark> landmarks) {
+    final List<LatLng> dots = [];
+    for (int i = 0; i < landmarks.length - 1; i++) {
+      final start = landmarks[i].location;
+      final end = landmarks[i + 1].location;
+      for (double step = 0.25; step < 0.99; step += 0.25) {
+        final lat = start.latitude + (end.latitude - start.latitude) * step;
+        final lng = start.longitude + (end.longitude - start.longitude) * step;
+        dots.add(LatLng(lat, lng));
+      }
+    }
+    return dots;
+  }
 
   void _zoomToFitAll(List<Landmark> landmarks) {
     if (landmarks.isEmpty) return;
@@ -90,6 +136,17 @@ class _MapScreenState extends State<MapScreen> {
         ),
         actions: [
           IconButton(
+            icon: Transform.rotate(
+              angle: -_currentRotation * (math.pi / 180),
+              child: Icon(
+                Icons.explore,
+                color: _currentRotation.abs() > 0.5 ? Colors.redAccent : null,
+              ),
+            ),
+            tooltip: '指北針回正',
+            onPressed: _resetCompassNorth,
+          ),
+          IconButton(
             icon: const Icon(Icons.center_focus_strong),
             tooltip: '一鍵全覽視角',
             onPressed: () => _zoomToFitAll(landmarks),
@@ -125,6 +182,13 @@ class _MapScreenState extends State<MapScreen> {
             options: MapOptions(
               initialCenter: initialCenter,
               initialZoom: 12.0,
+              onPositionChanged: (camera, hasGesture) {
+                if ((camera.rotation - _currentRotation).abs() > 0.1) {
+                  setState(() {
+                    _currentRotation = camera.rotation;
+                  });
+                }
+              },
               onTap: (tapPosition, point) {
                 _showAddDialog(lat: point.latitude, lng: point.longitude);
               },
@@ -137,17 +201,42 @@ class _MapScreenState extends State<MapScreen> {
                 retinaMode: RetinaMode.isHighDensity(context),
               ),
 
-              // Polyline Route Connectors
-              if (provider.showRouteLines && landmarks.length > 1)
+              // Polyline Route Connectors & Waypoint Dots
+              if (provider.showRouteLines && landmarks.length > 1) ...[
                 PolylineLayer(
                   polylines: [
                     Polyline(
                       points: landmarks.map((l) => l.location).toList(),
                       color: Colors.indigo.withAlpha(200),
-                      strokeWidth: 3.5,
+                      strokeWidth: 4.0,
                     ),
                   ],
                 ),
+                CircleLayer(
+                  circles: [
+                    // Intermediate route segment dots
+                    ..._generateRouteDots(landmarks).map(
+                      (point) => CircleMarker(
+                        point: point,
+                        radius: 3.5,
+                        color: Colors.indigoAccent,
+                        borderColor: Colors.white,
+                        borderStrokeWidth: 1.5,
+                      ),
+                    ),
+                    // Landmark vertex dots
+                    ...landmarks.map(
+                      (l) => CircleMarker(
+                        point: l.location,
+                        radius: 6.5,
+                        color: Colors.indigo,
+                        borderColor: Colors.white,
+                        borderStrokeWidth: 2.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
               // Custom Pin Markers with Always-Visible Permanent Labels
               MarkerLayer(
@@ -157,8 +246,8 @@ class _MapScreenState extends State<MapScreen> {
 
                   return Marker(
                     point: landmark.location,
-                    width: 140,
-                    height: 75,
+                    width: 220,
+                    height: 100,
                     alignment: Alignment.topCenter,
                     child: GestureDetector(
                       onTap: () {
@@ -175,11 +264,13 @@ class _MapScreenState extends State<MapScreen> {
                                     Text(landmark.category.iconSymbol,
                                         style: const TextStyle(fontSize: 24)),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      landmark.name,
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
+                                    Expanded(
+                                      child: Text(
+                                        landmark.name,
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -189,13 +280,33 @@ class _MapScreenState extends State<MapScreen> {
                                 const SizedBox(height: 4),
                                 Text('💡 筆記: ${landmark.notes.isNotEmpty ? landmark.notes : "無備註"}'),
                                 const SizedBox(height: 12),
-                                ElevatedButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    provider.deleteLandmark(landmark.id);
-                                  },
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  label: const Text('刪除此地標', style: TextStyle(color: Colors.red)),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          _openGoogleMapsNavigation(landmark);
+                                        },
+                                        icon: const Icon(Icons.navigation,
+                                            color: Colors.white),
+                                        label: const Text('開啟 Google 地圖景點'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        provider.deleteLandmark(landmark.id);
+                                      },
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.red),
+                                      tooltip: '刪除此地標',
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -207,52 +318,58 @@ class _MapScreenState extends State<MapScreen> {
                         children: [
                           // Permanent Visible Label Badge (Solves Google Maps pain point)
                           if (provider.showPermanentLabels)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  )
-                                ],
-                                border: Border.all(
-                                  color: landmark.category.color,
-                                  width: 1.5,
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 210),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    )
+                                  ],
+                                  border: Border.all(
+                                    color: landmark.category.color,
+                                    width: 1.5,
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 8,
-                                    backgroundColor: landmark.category.color,
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: const TextStyle(
-                                          fontSize: 9,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Flexible(
-                                    child: Text(
-                                      landmark.name,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 9,
+                                      backgroundColor: landmark.category.color,
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: const TextStyle(
+                                            fontSize: 9,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold),
                                       ),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        landmark.name,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                          height: 1.25,
+                                        ),
+                                        softWrap: true,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           const SizedBox(height: 2),
@@ -271,7 +388,7 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
 
-          // Tile Style & Floating Zoom Controllers
+          // Tile Style & Floating Controls (Zoom + Compass Reset)
           Positioned(
             top: 16,
             right: 16,
@@ -304,6 +421,22 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'btn_compass_reset',
+                  tooltip: '指北針回正',
+                  backgroundColor: _currentRotation.abs() > 0.5
+                      ? Colors.redAccent
+                      : Colors.white,
+                  foregroundColor: _currentRotation.abs() > 0.5
+                      ? Colors.white
+                      : Colors.indigo,
+                  onPressed: _resetCompassNorth,
+                  child: Transform.rotate(
+                    angle: -_currentRotation * (math.pi / 180),
+                    child: const Icon(Icons.explore),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 FloatingActionButton.small(
                   heroTag: 'btn_zoom_in',
                   onPressed: () {

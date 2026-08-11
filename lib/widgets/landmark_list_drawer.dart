@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/landmark.dart';
+import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 
 class LandmarkListDrawer extends StatelessWidget {
@@ -10,12 +11,98 @@ class LandmarkListDrawer extends StatelessWidget {
   const LandmarkListDrawer({super.key, required this.onSelectLandmark});
 
   Future<void> _openGoogleMapsNavigation(Landmark landmark) async {
+    final String name = landmark.name.trim();
+    final String address = landmark.address.trim();
+
+    // Prefer searching by landmark name (+ address if available) so Google Maps opens the Place Card
+    final String queryText = name.isNotEmpty
+        ? (address.isNotEmpty ? '$name $address' : name)
+        : '${landmark.latitude},${landmark.longitude}';
+
     final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${landmark.latitude},${landmark.longitude}',
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryText)}',
     );
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  void _showEditTripDialog(BuildContext context, Trip trip) {
+    final titleController = TextEditingController(text: trip.title);
+    final descController = TextEditingController(text: trip.description);
+    int selectedTotalDays = trip.totalDays;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('編輯行程資訊'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: '行程名稱',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descController,
+                      decoration: const InputDecoration(
+                        labelText: '行程描述 (選填)',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedTotalDays,
+                      decoration: const InputDecoration(
+                        labelText: '行程總天數',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: List.generate(30, (i) => i + 1)
+                          .map((d) => DropdownMenuItem(
+                                value: d,
+                                child: Text('共 $d 天'),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedTotalDays = val);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (titleController.text.trim().isNotEmpty) {
+                      context.read<TripProvider>().updateTrip(
+                            trip.id,
+                            titleController.text.trim(),
+                            descController.text.trim(),
+                            selectedTotalDays,
+                          );
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('儲存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -30,13 +117,14 @@ class LandmarkListDrawer extends StatelessWidget {
     final landmarks = provider.currentLandmarks;
 
     return Drawer(
+      width: MediaQuery.of(context).size.width,
       child: Column(
         children: [
           // Compact Non-Blocking Drawer Header
           Container(
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 16,
-              bottom: 16,
+              top: MediaQuery.of(context).padding.top + 12,
+              bottom: 14,
               left: 16,
               right: 16,
             ),
@@ -73,14 +161,27 @@ class LandmarkListDrawer extends StatelessWidget {
                           fontSize: 17,
                           color: Colors.white,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_note_rounded,
+                          color: Colors.white),
+                      tooltip: '編輯行程天數與名稱',
+                      onPressed: () => _showEditTripDialog(context, activeTrip),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                      tooltip: '關閉全螢幕選單',
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -90,14 +191,13 @@ class LandmarkListDrawer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        '共 ${activeTrip.landmarks.length} 個地點',
+                        '共 ${activeTrip.totalDays} 天 · ${activeTrip.landmarks.length} 個地點',
                         style:
                             const TextStyle(color: Colors.white, fontSize: 11),
                       ),
                     ),
-                    const SizedBox(width: 6),
                     const Text(
-                      '可按住右側 ☰ 拖曳排順序',
+                      '按住右側 ☰ 拖曳排順序 | 👈 往左滑可刪除地點',
                       style: TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ],
@@ -118,7 +218,7 @@ class LandmarkListDrawer extends StatelessWidget {
                   onSelected: (_) => provider.setSelectedDayFilter(null),
                 ),
                 const SizedBox(width: 8),
-                ...List.generate(5, (i) => i + 1).map((d) {
+                ...List.generate(activeTrip.totalDays, (i) => i + 1).map((d) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),
                     child: FilterChip(
@@ -134,7 +234,7 @@ class LandmarkListDrawer extends StatelessWidget {
           ),
           const Divider(height: 1),
 
-          // Landmarks Drag-to-Reorder List
+          // Landmarks Drag-to-Reorder List with Full-Width Names & Swipe-to-Delete
           Expanded(
             child: landmarks.isEmpty
                 ? const Center(
@@ -160,93 +260,210 @@ class LandmarkListDrawer extends StatelessWidget {
                       return Column(
                         key: ValueKey(item.id),
                         children: [
-                          Card(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          Dismissible(
+                            key: ValueKey(item.id),
+                            direction: DismissDirection.endToStart, // Swipe left
+                            background: Container(
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.centerRight,
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.delete_forever,
+                                      color: Colors.white, size: 24),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    '刪除地點',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.only(
-                                  left: 12, right: 8, top: 4, bottom: 4),
-                              leading: CircleAvatar(
-                                radius: 16,
-                                backgroundColor:
-                                    item.category.color.withAlpha(40),
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: item.category.color,
+                            confirmDismiss: (direction) async {
+                              return await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('確認刪除地點'),
+                                  content: Text(
+                                      '確定要刪除「${item.name}」嗎？刪除後將無法復原。'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('取消'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      child: const Text('刪除',
+                                          style: TextStyle(color: Colors.white)),
+                                    ),
+                                  ],
+                                ),
+                              ) ?? false;
+                            },
+                            onDismissed: (_) {
+                              provider.deleteLandmark(item.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('已刪除「${item.name}」')),
+                              );
+                            },
+                            child: Card(
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).pop(); // Close full screen drawer
+                                  onSelectLandmark(item);
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Row 1: Full-Width Title Line (Index + Icon + Name + Drag Handle)
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 14,
+                                            backgroundColor: item.category.color
+                                                .withAlpha(40),
+                                            child: Text(
+                                              '${index + 1}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                                color: item.category.color,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(item.category.iconSymbol,
+                                              style: const TextStyle(
+                                                  fontSize: 16)),
+                                          const SizedBox(width: 6),
+                                          // Full-width Landmark Name
+                                          Expanded(
+                                            child: Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                height: 1.3,
+                                              ),
+                                              softWrap: true,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Drag Handle to Reorder
+                                          ReorderableDragStartListener(
+                                            index: index,
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 4),
+                                              child: Icon(Icons.drag_handle,
+                                                  color: Colors.grey, size: 22),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      // Subtitle details (Full Width)
+                                      if (item.address.isNotEmpty ||
+                                          item.notes.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 36),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              if (item.address.isNotEmpty)
+                                                Text(
+                                                  '📍 ${item.address}',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.black87),
+                                                  softWrap: true,
+                                                ),
+                                              if (item.notes.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '💡 ${item.notes}',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.deepOrange),
+                                                  softWrap: true,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+
+                                      // Bottom Actions (Navigation Button & Swipe Left Hint)
+                                      const SizedBox(height: 8),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          TextButton.icon(
+                                            onPressed: () =>
+                                                _openGoogleMapsNavigation(item),
+                                            icon: const Icon(Icons.navigation,
+                                                color: Colors.blue, size: 16),
+                                            label: const Text('Google 地圖導航',
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.blue)),
+                                            style: TextButton.styleFrom(
+                                              padding: const EdgeInsets
+                                                  .symmetric(
+                                                  horizontal: 8, vertical: 4),
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize
+                                                  .shrinkWrap,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          const Row(
+                                            children: [
+                                              Icon(Icons.swipe_left_rounded,
+                                                  size: 14,
+                                                  color: Colors.grey),
+                                              SizedBox(width: 4),
+                                              Text('👈 往左滑刪除',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                              title: Row(
-                                children: [
-                                  Text(item.category.iconSymbol,
-                                      style: const TextStyle(fontSize: 14)),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      item.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (item.address.isNotEmpty)
-                                    Text(item.address,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 11)),
-                                  if (item.notes.isNotEmpty)
-                                    Text('💡 ${item.notes}',
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.deepOrange)),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.navigation,
-                                        color: Colors.blue, size: 18),
-                                    tooltip: '開啟 Google 地圖導航',
-                                    onPressed: () =>
-                                        _openGoogleMapsNavigation(item),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        color: Colors.grey, size: 18),
-                                    onPressed: () =>
-                                        provider.deleteLandmark(item.id),
-                                  ),
-                                  // Drag Handle to Reorder
-                                  ReorderableDragStartListener(
-                                    index: index,
-                                    child: const Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(horizontal: 4.0),
-                                      child: Icon(Icons.drag_handle,
-                                          color: Colors.grey),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                Navigator.of(context).pop(); // Close drawer
-                                onSelectLandmark(item);
-                              },
                             ),
                           ),
                           // Relative distance indicator to next point

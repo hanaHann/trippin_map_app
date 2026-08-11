@@ -23,21 +23,27 @@ class GoogleMapsParser {
     String? extractedName;
     String targetUrl = input;
 
-    // 1. Separate place name prefix if user pasted share text like "台場 https://maps.app.goo.gl/..."
+    // 1. Extract surrounding place name text from share text (before or after URL)
     final urlRegex = RegExp(r'https?://[^\s]+');
     final urlMatch = urlRegex.firstMatch(input);
 
     if (urlMatch != null) {
       targetUrl = urlMatch.group(0)!;
-      final prefixText = input
-          .substring(0, urlMatch.start)
+      final surroundingText = input
+          .replaceAll(urlRegex, '')
+          .replaceAll('\n', ' ')
           .replaceAll('「', '')
           .replaceAll('」', '')
           .replaceAll('"', '')
           .replaceAll('\'', '')
+          .replaceAll('Google 地圖', '')
+          .replaceAll('Google Maps', '')
           .trim();
-      if (prefixText.isNotEmpty && !prefixText.startsWith('http')) {
-        extractedName = prefixText;
+
+      if (surroundingText.isNotEmpty &&
+          surroundingText.length < 100 &&
+          !surroundingText.startsWith('http')) {
+        extractedName = surroundingText;
       }
     }
 
@@ -61,8 +67,9 @@ class GoogleMapsParser {
         final response = await client.get(
           Uri.parse(targetUrl),
           headers: {
+            // Use Desktop User-Agent so Google Maps redirects to /maps/place/PLACE_NAME/
             'User-Agent':
-                'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
           },
         );
@@ -71,7 +78,8 @@ class GoogleMapsParser {
         final htmlBody = response.body;
 
         // Try extracting exact pin coordinates from HTML body or redirected URL
-        final bodyCoords = _extractCoordinates(htmlBody) ?? _extractCoordinates(finalUrl);
+        final bodyCoords =
+            _extractCoordinates(htmlBody) ?? _extractCoordinates(finalUrl);
         if (bodyCoords != null) {
           lat = bodyCoords[0];
           lng = bodyCoords[1];
@@ -87,9 +95,12 @@ class GoogleMapsParser {
     }
 
     // 5. If we have a place name but missing coordinates, search via Nominatim
-    if ((lat == null || lng == null) && extractedName != null && extractedName.isNotEmpty) {
+    if ((lat == null || lng == null) &&
+        extractedName != null &&
+        extractedName.isNotEmpty) {
       try {
-        final searchResults = await NominatimService.searchPlaces(extractedName);
+        final searchResults =
+            await NominatimService.searchPlaces(extractedName);
         if (searchResults.isNotEmpty) {
           lat = searchResults.first.latitude;
           lng = searchResults.first.longitude;
@@ -97,15 +108,14 @@ class GoogleMapsParser {
       } catch (_) {}
     }
 
-    // 6. If we have coordinates, resolve place name (reverse geocode if name is missing, English, or generic)
+    // 6. If we have coordinates, resolve place name (only reverse geocode if name is completely missing or generic default)
     if (lat != null && lng != null) {
       if (extractedName == null ||
           extractedName.isEmpty ||
           extractedName == 'Google 地圖' ||
           extractedName == 'Google Maps' ||
           extractedName.startsWith('自訂地點') ||
-          extractedName.startsWith('自訂定位點') ||
-          RegExp(r'^[a-zA-Z0-9\s,\+\-]+$').hasMatch(extractedName)) {
+          extractedName.startsWith('自訂定位點')) {
         final geocodedName = await _reverseGeocode(lat, lng);
         if (geocodedName != null && geocodedName.isNotEmpty) {
           extractedName = geocodedName;
@@ -113,13 +123,42 @@ class GoogleMapsParser {
       }
 
       return ParsedLocationResult(
-        name: extractedName ?? '自訂地點 (${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)})',
+        name: extractedName != null
+            ? _cleanAndDecodeName(extractedName)
+            : '自訂地點 (${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)})',
         latitude: lat,
         longitude: lng,
       );
     }
 
     return null;
+  }
+
+  /// Safely decodes URL encoded strings (including percent-encoding and + signs)
+  static String _cleanAndDecodeName(String str) {
+    String decoded = str.replaceAll('+', ' ').trim();
+    try {
+      decoded = Uri.decodeComponent(decoded);
+    } catch (_) {
+      try {
+        decoded = Uri.decodeFull(decoded);
+      } catch (_) {}
+    }
+
+    // Decode recursively if string is double percent-encoded (e.g. %25E6%259C%2588)
+    int iterations = 0;
+    while (decoded.contains('%') && iterations < 3) {
+      try {
+        final next = Uri.decodeComponent(decoded);
+        if (next == decoded) break;
+        decoded = next;
+      } catch (_) {
+        break;
+      }
+      iterations++;
+    }
+
+    return decoded.replaceAll('+', ' ').trim();
   }
 
   /// Extracts [lat, lng] using 5 Google Maps coordinate patterns
@@ -172,8 +211,8 @@ class GoogleMapsParser {
     // Match /maps/place/PLACE_NAME/ or /maps/search/PLACE_NAME/
     final placeMatch = RegExp(r'/maps/(?:place|search)/([^/@?\x26"]+)').firstMatch(url);
     if (placeMatch != null) {
-      final raw = placeMatch.group(1)!.replaceAll('+', ' ');
-      final decoded = Uri.decodeFull(raw).trim();
+      final raw = placeMatch.group(1)!;
+      final decoded = _cleanAndDecodeName(raw);
       final firstSegment = decoded.split(',').first.trim();
       if (firstSegment.isNotEmpty &&
           !firstSegment.startsWith('http') &&
@@ -185,8 +224,8 @@ class GoogleMapsParser {
     // Match ?q=PLACE_NAME or &q=PLACE_NAME or query=PLACE_NAME
     final qMatch = RegExp(r'[?&](?:q|query)=([^&]+)').firstMatch(url);
     if (qMatch != null) {
-      final raw = qMatch.group(1)!.replaceAll('+', ' ');
-      final decoded = Uri.decodeFull(raw).trim();
+      final raw = qMatch.group(1)!;
+      final decoded = _cleanAndDecodeName(raw);
       final firstSegment = decoded.split(',').first.trim();
       if (firstSegment.isNotEmpty &&
           !RegExp(r'^-?\d+\.\d+(?:%2C|,)\s*-?\d+\.\d+$').hasMatch(firstSegment)) {
@@ -199,28 +238,32 @@ class GoogleMapsParser {
 
   /// Extracts place name from HTML meta tags or title
   static String? _extractNameFromHtml(String html) {
-    final ogMatch = RegExp(r'og:title"[^>]*content="([^"]+)"', caseSensitive: false)
-            .firstMatch(html) ??
-        RegExp(r'content="([^"]+)"[^>]*og:title', caseSensitive: false)
-            .firstMatch(html);
+    final ogMatch = RegExp(r'property="(?:og:title|twitter:title)"\s+content="([^"]+)"', caseSensitive: false).firstMatch(html) ??
+        RegExp(r'content="([^"]+)"\s+property="(?:og:title|twitter:title)"', caseSensitive: false).firstMatch(html) ??
+        RegExp(r'og:title"[^>]*content="([^"]+)"', caseSensitive: false).firstMatch(html);
 
     if (ogMatch != null) {
-      final text = ogMatch.group(1)!;
-      final clean = text.split('·').first.split('-').first.trim();
+      final raw = ogMatch.group(1)!;
+      final decoded = _cleanAndDecodeName(raw);
+      final clean = decoded.split('·').first.split('-').first.split('|').first.trim();
       if (clean.isNotEmpty && clean != 'Google 地圖' && clean != 'Google Maps') {
         return clean;
       }
     }
 
-    final titleMatch =
-        RegExp(r'<title>(.*?)</title>', caseSensitive: false).firstMatch(html);
+    final titleMatch = RegExp(r'<title>(.*?)</title>', caseSensitive: false).firstMatch(html);
     if (titleMatch != null) {
-      final titleText = titleMatch
-          .group(1)!
+      final raw = titleMatch.group(1)!;
+      final decoded = _cleanAndDecodeName(raw);
+      final titleText = decoded
           .replaceAll('- Google 地圖', '')
           .replaceAll('- Google Maps', '')
+          .replaceAll('· Google Maps', '')
+          .replaceAll('· Google 地圖', '')
           .trim();
-      if (titleText.isNotEmpty) return titleText;
+      if (titleText.isNotEmpty && titleText != 'Google 地圖' && titleText != 'Google Maps') {
+        return titleText;
+      }
     }
 
     return null;

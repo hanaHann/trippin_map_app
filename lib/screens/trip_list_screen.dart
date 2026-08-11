@@ -1,55 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 
 class TripListScreen extends StatelessWidget {
   const TripListScreen({super.key});
 
-  void _showCreateTripDialog(BuildContext context) {
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
+  void _showTripDialog(BuildContext context, {Trip? trip}) {
+    final isEditing = trip != null;
+    final titleController = TextEditingController(text: trip?.title ?? '');
+    final descController = TextEditingController(text: trip?.description ?? '');
+    int selectedDays = trip?.totalDays ?? 5;
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('建立全新旅遊行程'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: '行程名稱 (例如: 2026 東京5天4夜)',
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isEditing ? '編輯行程資訊' : '建立全新旅遊行程'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        labelText: '行程名稱 (例如: 2026 東京5天4夜)',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descController,
+                      decoration: const InputDecoration(
+                        labelText: '行程描述 (選填)',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedDays,
+                      decoration: const InputDecoration(
+                        labelText: '規劃總天數',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: List.generate(30, (i) => i + 1)
+                          .map((d) => DropdownMenuItem(
+                                value: d,
+                                child: Text('共 $d 天'),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedDays = val);
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  labelText: '行程描述 (選填)',
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('取消'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.trim().isNotEmpty) {
-                  context.read<TripProvider>().addTrip(
-                        titleController.text.trim(),
-                        descController.text.trim(),
-                      );
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('建立'),
-            ),
-          ],
+                ElevatedButton(
+                  onPressed: () {
+                    final title = titleController.text.trim();
+                    if (title.isNotEmpty) {
+                      if (isEditing) {
+                        context.read<TripProvider>().updateTrip(
+                              trip.id,
+                              title,
+                              descController.text.trim(),
+                              selectedDays,
+                            );
+                      } else {
+                        context.read<TripProvider>().addTrip(
+                              title,
+                              descController.text.trim(),
+                              totalDays: selectedDays,
+                            );
+                      }
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: Text(isEditing ? '儲存修改' : '建立'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -103,10 +142,20 @@ class TripListScreen extends StatelessWidget {
                       ? trip.description
                       : '尚無描述'),
                   const SizedBox(height: 6),
-                  Chip(
-                    avatar: const Icon(Icons.pin_drop, size: 14),
-                    label: Text('${trip.landmarks.length} 個獨佔地標 (完全屏蔽雜訊)'),
-                    visualDensity: VisualDensity.compact,
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      Chip(
+                        avatar: const Icon(Icons.calendar_month, size: 14),
+                        label: Text('共 ${trip.totalDays} 天'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      Chip(
+                        avatar: const Icon(Icons.pin_drop, size: 14),
+                        label: Text('${trip.landmarks.length} 個獨佔地標'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -115,6 +164,8 @@ class TripListScreen extends StatelessWidget {
                   if (val == 'select') {
                     provider.setActiveTrip(trip.id);
                     Navigator.of(context).pop();
+                  } else if (val == 'edit') {
+                    _showTripDialog(context, trip: trip);
                   } else if (val == 'delete') {
                     provider.deleteTrip(trip.id);
                   }
@@ -122,11 +173,33 @@ class TripListScreen extends StatelessWidget {
                 itemBuilder: (context) => [
                   const PopupMenuItem(
                     value: 'select',
-                    child: Text('切換至此行程'),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 18),
+                        SizedBox(width: 8),
+                        Text('切換至此行程'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('編輯行程 (名稱/天數)'),
+                      ],
+                    ),
                   ),
                   const PopupMenuItem(
                     value: 'delete',
-                    child: Text('刪除行程', style: TextStyle(color: Colors.red)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                        SizedBox(width: 8),
+                        Text('刪除行程', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -139,7 +212,7 @@ class TripListScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateTripDialog(context),
+        onPressed: () => _showTripDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('新增行程'),
       ),

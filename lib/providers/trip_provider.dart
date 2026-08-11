@@ -77,17 +77,31 @@ class TripProvider with ChangeNotifier {
     _saveToPrefs();
   }
 
-  void addTrip(String title, String description) {
+  void addTrip(String title, String description, {int totalDays = 5}) {
     final newTrip = Trip(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
       description: description,
+      totalDays: totalDays,
       landmarks: [],
     );
     _trips.add(newTrip);
     _activeTripId = newTrip.id;
     notifyListeners();
     _saveToPrefs();
+  }
+
+  void updateTrip(String tripId, String title, String description, int totalDays) {
+    final index = _trips.indexWhere((t) => t.id == tripId);
+    if (index != -1) {
+      _trips[index] = _trips[index].copyWith(
+        title: title,
+        description: description,
+        totalDays: totalDays,
+      );
+      notifyListeners();
+      _saveToPrefs();
+    }
   }
 
   void deleteTrip(String tripId) {

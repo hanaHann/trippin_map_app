@@ -311,7 +311,7 @@ class _MapScreenState extends State<MapScreen> {
   String _getTileUrl(MapTileStyle style) {
     switch (style) {
       case MapTileStyle.pastelPink:
-        return 'https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
+        return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.macaronCream:
         return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.light:
@@ -338,7 +338,7 @@ class _MapScreenState extends State<MapScreen> {
           {
             'style': MapTileStyle.pastelPink,
             'label': '夢幻粉彩',
-            'desc': '柔和粉紅與珊瑚暖海配色'
+            'desc': '夢幻櫻花粉紅與柔粉玫瑰色調'
           },
           {
             'style': MapTileStyle.macaronCream,
@@ -548,6 +548,19 @@ class _MapScreenState extends State<MapScreen> {
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.hana.trip_pin_app',
                   retinaMode: RetinaMode.isHighDensity(context),
+                  tileBuilder: provider.tileStyle == MapTileStyle.pastelPink
+                      ? (context, tileWidget, tile) {
+                          return ColorFiltered(
+                            colorFilter: const ColorFilter.matrix(<double>[
+                              1.15, 0.10, 0.15, 0, 40,
+                              0.35, 0.75, 0.20, 0, 10,
+                              0.45, 0.25, 0.80, 0, 25,
+                              0, 0, 0, 1, 0,
+                            ]),
+                            child: tileWidget,
+                          );
+                        }
+                      : null,
                 ),
 
                 // Polyline Route Connectors & Waypoint Dots

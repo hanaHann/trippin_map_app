@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:gal/gal.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -197,15 +198,35 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('🎉 可愛地圖圖片已成功生成並儲存！')),
-                          );
+                        onPressed: () async {
+                          try {
+                            final hasAccess = await Gal.hasAccess(toAlbum: true);
+                            if (!hasAccess) {
+                              await Gal.requestAccess(toAlbum: true);
+                            }
+                            await Gal.putImage(imageFile.path);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('🎉 可愛地圖圖片已成功儲存至手機相簿！'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('❌ 儲存至相簿失敗：$e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          }
                         },
-                        icon: const Icon(Icons.check_circle_outline_rounded),
-                        label: const Text('已儲存圖片'),
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('儲存至相簿'),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(

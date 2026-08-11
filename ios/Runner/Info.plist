@@ -4,6 +4,10 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>我們需要相簿權限，以便將地圖圖片儲存至您的相簿。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>我們需要相簿權限，以便將地圖圖片儲存至您的相簿。</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

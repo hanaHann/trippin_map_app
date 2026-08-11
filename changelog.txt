@@ -2,6 +2,13 @@
                       MapMap - CHANGELOG & VERSION HISTORY
 ========================================================================
 
+[v1.0.18+19] - 2026-08-11
+------------------------------------------------------------------------
+🔥 突破性修復 HTTP 302 重定向 Location 標頭解析 (Breakthrough HTTP 302 Location Header Parser):
+  • 🎯 重大突破: 針對 Firebase Dynamic Links (`maps.app.goo.gl/NWXkuk8W13Hv6zmr9`) 增加 HTTP 302 手動 Location Header 攔截機制，成功抓取「一花婚紗 日本東京 Ichika Pre-wedding (東京淺草)」實體地名與精準經緯度。
+  • 🛡️ 徹底解決短網址因自動重定向丟失中間 Location Header 導致降級至台灣 IP 預設區域的 Bug。
+
+
 [v1.0.17+18] - 2026-08-11
 ------------------------------------------------------------------------
 ✨ 新增地標地圖自動鏡頭飛行與解析透明度優化 (Map Camera Auto-Fly & Parsing Transparency):

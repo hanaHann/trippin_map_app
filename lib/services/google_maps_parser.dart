@@ -14,7 +14,7 @@ class ParsedLocationResult {
   /// The extracted Google Feature ID, CID, or Place ID (e.g., 0x34683d5a4980f7ad:0x7c731fa55b85a3c1).
   final String? placeId;
 
-  /// The resolved location/landmark name (e.g., "木村堂 楊梅店" or "東京晴空塔").
+  /// The resolved location/landmark name (e.g., "一花婚紗 日本東京 Ichika Pre-wedding" or "木村堂 楊梅店").
   final String name;
 
   /// The resolved latitude.
@@ -51,12 +51,6 @@ class GoogleMapsParser {
   static const Duration timeoutDuration = Duration(seconds: 8);
 
   /// Production-grade parser for Google Maps URLs (including maps.app.goo.gl), share snippets, or coordinates.
-  ///
-  /// Strict Priority Sequence:
-  /// 1. HTTP Follow Redirect: Follow short links to obtain the expanded URL & HTML body.
-  /// 2. Priority 1 (Highest): Extract Place ID / Feature ID (0x...:0x...) and exact POI pin (!3d/!4d).
-  /// 3. Priority 2: Extract place name (/place/NAME/, og:title) and search via geocoder.
-  /// 4. Priority 3 (Lowest Fallback): Extract viewport camera center (@lat,lng) ONLY if no POI or place name exists.
   static Future<ParsedLocationResult?> parseInput(String rawInput) async {
     final String input = rawInput.trim();
     if (input.isEmpty) return null;
@@ -64,6 +58,7 @@ class GoogleMapsParser {
     String? extractedName;
     String targetUrl = input;
     String expandedUrl = input;
+    String locationHeaderUrl = '';
     String htmlBody = '';
 
     // 1. Extract surrounding place name text from share snippet (e.g., 「東京晴空塔」 https://maps.app.goo.gl/...)
@@ -92,39 +87,25 @@ class GoogleMapsParser {
       }
     }
 
-    // 2. Extract Place ID / Feature ID if present directly in input
-    String? placeId = _extractPlaceId(input);
-
-    // 3. HTTP Follow Redirect if input contains a URL
+    // 2. HTTP Follow Redirect & Location Header Capture if input contains a URL
     if (targetUrl.startsWith('http')) {
-      try {
-        final client = http.Client();
-        final response = await client
-            .get(
-              Uri.parse(targetUrl),
-              headers: {
-                // Desktop User-Agent forces Google Maps to expand to full /maps/place/PLACE_NAME/ URL
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
-              },
-            )
-            .timeout(timeoutDuration);
-
-        expandedUrl = response.request?.url.toString() ?? targetUrl;
-        htmlBody = response.body;
-
-        // Try extracting placeId from redirected URL or HTML body
-        placeId ??= _extractPlaceId(expandedUrl) ?? _extractPlaceId(htmlBody);
-
-        // Extract place name from redirected URL path or HTML body
-        extractedName ??= _extractNameFromUrl(expandedUrl);
-        extractedName ??= _extractNameFromUrl(htmlBody);
-        extractedName ??= _extractNameFromHtml(htmlBody);
-      } catch (e) {
-        // Fallback gracefully if HTTP redirect times out or network fails
-      }
+      final resolved = await _resolveUrlAndHtml(targetUrl);
+      expandedUrl = resolved['expandedUrl'] ?? targetUrl;
+      locationHeaderUrl = resolved['locationHeaderUrl'] ?? '';
+      htmlBody = resolved['htmlBody'] ?? '';
     }
+
+    // 3. Extract Place ID / Feature ID
+    String? placeId = _extractPlaceId(input) ??
+        _extractPlaceId(locationHeaderUrl) ??
+        _extractPlaceId(expandedUrl) ??
+        _extractPlaceId(htmlBody);
+
+    // 4. Extract place name from Location Header, expanded URL, or HTML body
+    extractedName ??= _extractNameFromLocationHeader(locationHeaderUrl);
+    extractedName ??= _extractNameFromUrl(expandedUrl);
+    extractedName ??= _extractNameFromUrl(htmlBody);
+    extractedName ??= _extractNameFromHtml(htmlBody);
 
     double? lat;
     double? lng;
@@ -132,6 +113,7 @@ class GoogleMapsParser {
 
     // Priority 1 (Highest): Extract exact POI Pin coordinates (!3d...!4d...)
     final exactPinCoords = _extractExactPinCoordinates(input) ??
+        _extractExactPinCoordinates(locationHeaderUrl) ??
         _extractExactPinCoordinates(expandedUrl) ??
         _extractExactPinCoordinates(htmlBody);
 
@@ -149,10 +131,10 @@ class GoogleMapsParser {
         extractedName != 'Google Maps') {
       try {
         final searchResults =
-            await NominatimService.searchPlaces(extractedName);
-        if (searchResults.isNotEmpty) {
-          lat = searchResults.first.latitude;
-          lng = searchResults.first.longitude;
+            await _searchPlaceWithFallbacks(extractedName, locationHeaderUrl);
+        if (searchResults != null) {
+          lat = searchResults.latitude;
+          lng = searchResults.longitude;
           resolutionMethod = 'place_name_search';
         }
       } catch (_) {}
@@ -161,6 +143,7 @@ class GoogleMapsParser {
     // Priority 3 (Lowest Fallback): Camera Viewport Center (@lat,lng)
     if (lat == null || lng == null) {
       final viewportCoords = _extractViewportCoordinates(input) ??
+          _extractViewportCoordinates(locationHeaderUrl) ??
           _extractViewportCoordinates(expandedUrl) ??
           _extractViewportCoordinates(htmlBody);
 
@@ -187,7 +170,7 @@ class GoogleMapsParser {
 
       return ParsedLocationResult(
         sourceUrl: input,
-        expandedUrl: expandedUrl,
+        expandedUrl: expandedUrl.isNotEmpty ? expandedUrl : targetUrl,
         placeId: placeId,
         name: extractedName != null
             ? _cleanAndDecodeName(extractedName)
@@ -201,24 +184,129 @@ class GoogleMapsParser {
     return null;
   }
 
+  /// Inspects HTTP 302 Location headers to resolve Firebase Dynamic Links (maps.app.goo.gl)
+  static Future<Map<String, String>> _resolveUrlAndHtml(String targetUrl) async {
+    String currentUrl = targetUrl;
+    String locationHeaderUrl = '';
+    String htmlBody = '';
+
+    try {
+      final client = http.Client();
+
+      // Step A: Inspect 301/302 Location header without following redirect automatically
+      final reqNoRedirect = http.Request('GET', Uri.parse(targetUrl));
+      reqNoRedirect.followRedirects = false;
+      reqNoRedirect.headers.addAll({
+        'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+      });
+
+      final streamedResp =
+          await client.send(reqNoRedirect).timeout(timeoutDuration);
+      if (streamedResp.headers.containsKey('location')) {
+        locationHeaderUrl = streamedResp.headers['location'] ?? '';
+      }
+
+      // Step B: Perform standard GET to follow full redirect chain
+      final response = await client
+          .get(
+            Uri.parse(targetUrl),
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
+            },
+          )
+          .timeout(timeoutDuration);
+
+      currentUrl = response.request?.url.toString() ?? targetUrl;
+      htmlBody = response.body;
+    } catch (_) {}
+
+    return {
+      'expandedUrl': currentUrl,
+      'locationHeaderUrl': locationHeaderUrl,
+      'htmlBody': htmlBody,
+    };
+  }
+
+  /// Extracts place name / address from HTTP Location header (maps.google.com?q=...)
+  static String? _extractNameFromLocationHeader(String locationHeaderUrl) {
+    if (locationHeaderUrl.isEmpty) return null;
+
+    try {
+      final uri = Uri.parse(locationHeaderUrl);
+      final rawQuery = uri.queryParameters['q'];
+      if (rawQuery != null && rawQuery.isNotEmpty) {
+        final decoded = _cleanAndDecodeName(rawQuery);
+        if (decoded.isNotEmpty &&
+            !RegExp(r'^-?\d+\.\d+(?:%2C|,)\s*-?\d+\.\d+$').hasMatch(decoded)) {
+          // If query has store name appended (e.g. "... 一花婚紗 日本東京 Ichika Pre-wedding")
+          final parts = decoded.split(' ');
+          if (parts.length > 2) {
+            // Pick last 3 words or landmark portion
+            final landmarkPart = parts.sublist(parts.length > 4 ? parts.length - 4 : 0).join(' ');
+            return landmarkPart;
+          }
+          return decoded;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  /// Performs Nominatim search with smart fallbacks
+  static Future<SearchPlaceResult?> _searchPlaceWithFallbacks(
+      String extractedName, String locationHeaderUrl) async {
+    // 1. Try extractedName directly
+    List<SearchPlaceResult> results =
+        await NominatimService.searchPlaces(extractedName);
+    if (results.isNotEmpty) return results.first;
+
+    // 2. If locationHeaderUrl query param exists (e.g., Tokyo Taito Nishiasakusa)
+    if (locationHeaderUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(locationHeaderUrl);
+        final rawQuery = uri.queryParameters['q'];
+        if (rawQuery != null) {
+          final decoded = _cleanAndDecodeName(rawQuery);
+          // Try city/district portion of address
+          final searchClean = decoded
+              .replaceAll('〒', '')
+              .replaceAll('日本', 'Japan ')
+              .split(' ')
+              .where((s) => s.length > 2)
+              .take(3)
+              .join(' ');
+          if (searchClean.isNotEmpty) {
+            results = await NominatimService.searchPlaces(searchClean);
+            if (results.isNotEmpty) return results.first;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
   /// Extracts Feature ID, CID, or Place ID from string
   static String? _extractPlaceId(String str) {
     if (str.isEmpty) return null;
 
-    // Pattern 1: Feature ID Hex pair (e.g., !1s0x34683d5a4980f7ad:0x7c731fa55b85a3c1 or ftid=0x...:0x...)
-    final pFtid = RegExp(r'(?:!1s|ftid=)?(0x[0-9a-fA-F]+(?:%3A|:)?0x[0-9a-fA-F]+)')
-        .firstMatch(str);
+    final pFtid =
+        RegExp(r'(?:!1s|ftid=)?(0x[0-9a-fA-F]+(?:%3A|:)?0x[0-9a-fA-F]+)')
+            .firstMatch(str);
     if (pFtid != null) {
       return pFtid.group(1)!.replaceAll('%3A', ':');
     }
 
-    // Pattern 2: place_id query param (e.g., place_id=ChIJ...)
     final pPlaceId = RegExp(r'[?&]place_id=([a-zA-Z0-9_-]+)').firstMatch(str);
     if (pPlaceId != null) {
       return pPlaceId.group(1);
     }
 
-    // Pattern 3: cid query param (e.g., cid=123456789)
     final pCid = RegExp(r'[?&]cid=(\d+)').firstMatch(str);
     if (pCid != null) {
       return 'cid:${pCid.group(1)}';
@@ -227,11 +315,10 @@ class GoogleMapsParser {
     return null;
   }
 
-  /// Extracts EXACT POI pin coordinates (!3d / !4d / q= / ll=)
+  /// Extracts EXACT POI pin coordinates (!3d / !4d)
   static List<double>? _extractExactPinCoordinates(String str) {
     if (str.isEmpty) return null;
 
-    // Pattern 1: Exact POI pin !8m2!3d35.6311555!4d139.7787019 or !3d35.6311555!4d139.7787019
     final pExactPin =
         RegExp(r'!3d(-?\d+\.\d+)(?:!|\\x21|/)*4d(-?\d+\.\d+)').firstMatch(str);
     if (pExactPin != null) {
@@ -240,16 +327,6 @@ class GoogleMapsParser {
       if (lat != null && lng != null) return [lat, lng];
     }
 
-    // Pattern 2: q=35.6268,139.7766 or ll=35.6268,139.7766
-    final pQ = RegExp(r'[?&](?:q|ll|query)=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)')
-        .firstMatch(str);
-    if (pQ != null) {
-      final lat = double.tryParse(pQ.group(1)!);
-      final lng = double.tryParse(pQ.group(2)!);
-      if (lat != null && lng != null) return [lat, lng];
-    }
-
-    // Pattern 3: Raw coordinate string (e.g. 24.9144, 121.1467)
     final pRaw =
         RegExp(r'^\s*(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})\s*$')
             .firstMatch(str);

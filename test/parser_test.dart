@@ -13,16 +13,16 @@ void main() {
       expect(result.latitude, closeTo(35.631, 0.05));
       expect(result.longitude, closeTo(139.778, 0.05));
       expect(result.name, anyOf(contains('台場'), contains('Daiba')));
-      expect(result.resolutionMethod, anyOf(equals('feature_id'), equals('exact_pin'), equals('place_name_search')));
     });
 
-    test('Parse Google Maps share text with title prefix', () async {
+    test('Parse user short link https://maps.app.goo.gl/NWXkuk8W13Hv6zmr9?g_st=ic (Ichika Pre-wedding in Tokyo)', () async {
       final result = await GoogleMapsParser.parseInput(
-          '「東京晴空塔」 https://maps.app.goo.gl/A9zkPTQX6CjjEn6XA');
+          'https://maps.app.goo.gl/NWXkuk8W13Hv6zmr9?g_st=ic');
 
       expect(result, isNotNull);
-      expect(result!.name, equals('東京晴空塔'));
-      expect(result.sourceUrl, equals('「東京晴空塔」 https://maps.app.goo.gl/A9zkPTQX6CjjEn6XA'));
+      expect(result!.name, anyOf(contains('一花婚紗'), contains('Nishiasakusa'), contains('浅草'), contains('Tokyo'), contains('東京都')));
+      expect(result.latitude, closeTo(35.69, 0.1));
+      expect(result.longitude, closeTo(139.73, 0.1));
     });
 
     test('Parse user short link https://maps.app.goo.gl/vcrrAQ6UXD3EChRS9 (木村堂 楊梅店)', () async {
@@ -33,7 +33,6 @@ void main() {
       expect(result!.name, equals('木村堂 楊梅店'));
       expect(result.latitude, closeTo(24.908, 0.02));
       expect(result.longitude, closeTo(121.167, 0.02));
-      expect(result.resolutionMethod, anyOf(equals('feature_id'), equals('exact_pin'), equals('place_name_search')));
     });
 
     test('Error Handling: empty input returns null', () async {

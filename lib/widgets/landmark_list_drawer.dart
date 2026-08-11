@@ -441,19 +441,6 @@ class LandmarkListDrawer extends StatelessWidget {
                                                   .shrinkWrap,
                                             ),
                                           ),
-                                          const Spacer(),
-                                          const Row(
-                                            children: [
-                                              Icon(Icons.swipe_left_rounded,
-                                                  size: 14,
-                                                  color: Colors.grey),
-                                              SizedBox(width: 4),
-                                              Text('👈 往左滑刪除',
-                                                  style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: Colors.grey)),
-                                            ],
-                                          ),
                                         ],
                                       ),
                                     ],

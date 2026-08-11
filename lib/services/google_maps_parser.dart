@@ -49,12 +49,20 @@ class GoogleMapsParser {
 
     double? lat;
     double? lng;
+    double? viewportLat;
+    double? viewportLng;
 
-    // 2. Extract coordinates directly from input string
-    final directCoords = _extractCoordinates(input);
-    if (directCoords != null) {
-      lat = directCoords[0];
-      lng = directCoords[1];
+    // 2. Extract EXACT PIN coordinates directly from input string
+    final directExactCoords = _extractExactPinCoordinates(input);
+    if (directExactCoords != null) {
+      lat = directExactCoords[0];
+      lng = directExactCoords[1];
+    } else {
+      final directViewport = _extractViewportCoordinates(input);
+      if (directViewport != null) {
+        viewportLat = directViewport[0];
+        viewportLng = directViewport[1];
+      }
     }
 
     // 3. Extract place name directly from input URL (/maps/place/台場/ or ?q=台場)
@@ -77,15 +85,25 @@ class GoogleMapsParser {
         final finalUrl = response.request?.url.toString() ?? targetUrl;
         final htmlBody = response.body;
 
-        // Try extracting exact pin coordinates from HTML body or redirected URL
-        final bodyCoords =
-            _extractCoordinates(htmlBody) ?? _extractCoordinates(finalUrl);
-        if (bodyCoords != null) {
-          lat = bodyCoords[0];
-          lng = bodyCoords[1];
+        // Extract EXACT POI Pin coordinates from HTML body or redirected URL
+        final bodyExactCoords =
+            _extractExactPinCoordinates(htmlBody) ?? _extractExactPinCoordinates(finalUrl);
+        if (bodyExactCoords != null) {
+          lat = bodyExactCoords[0];
+          lng = bodyExactCoords[1];
         }
 
-        // Try extracting place name from redirected URL path or HTML body
+        // Store viewport coordinates as fallback ONLY
+        if (lat == null || lng == null) {
+          final bodyViewport =
+              _extractViewportCoordinates(finalUrl) ?? _extractViewportCoordinates(htmlBody);
+          if (bodyViewport != null) {
+            viewportLat = bodyViewport[0];
+            viewportLng = bodyViewport[1];
+          }
+        }
+
+        // Extract place name from redirected URL path or HTML body
         extractedName ??= _extractNameFromUrl(finalUrl);
         extractedName ??= _extractNameFromUrl(htmlBody);
         extractedName ??= _extractNameFromHtml(htmlBody);
@@ -94,10 +112,14 @@ class GoogleMapsParser {
       }
     }
 
-    // 5. If we have a place name but missing coordinates, search via Nominatim
+    // 5. If we have a place name BUT missing exact pin coordinates:
+    // ALWAYS search via Nominatim first using extractedName to get the REAL location of the place,
+    // INSTEAD of blindly defaulting to the local camera viewport center (@... near user's house)!
     if ((lat == null || lng == null) &&
         extractedName != null &&
-        extractedName.isNotEmpty) {
+        extractedName.isNotEmpty &&
+        extractedName != 'Google 地圖' &&
+        extractedName != 'Google Maps') {
       try {
         final searchResults =
             await NominatimService.searchPlaces(extractedName);
@@ -108,7 +130,15 @@ class GoogleMapsParser {
       } catch (_) {}
     }
 
-    // 6. If we have coordinates, resolve place name (only reverse geocode if name is completely missing or generic default)
+    // 6. Only if exact pin AND Nominatim place name search failed, fall back to viewport coordinates
+    if (lat == null || lng == null) {
+      if (viewportLat != null && viewportLng != null) {
+        lat = viewportLat;
+        lng = viewportLng;
+      }
+    }
+
+    // 7. If we have coordinates, resolve place name (only reverse geocode if name is completely missing or generic default)
     if (lat != null && lng != null) {
       if (extractedName == null ||
           extractedName.isEmpty ||
@@ -161,17 +191,38 @@ class GoogleMapsParser {
     return decoded.replaceAll('+', ' ').trim();
   }
 
-  /// Extracts [lat, lng] using 5 Google Maps coordinate patterns
-  static List<double>? _extractCoordinates(String str) {
-    // Pattern 1: Exact pin !3d35.6311555!4d139.7787019 or !3d35.6311555\x214d139.7787019
-    final pExactPin = RegExp(r'!3d(-?\d+\.\d+)(?:!|\\x21)4d(-?\d+\.\d+)').firstMatch(str);
+  /// Extracts EXACT POI pin coordinates (!3d / !4d / q= / ll=)
+  static List<double>? _extractExactPinCoordinates(String str) {
+    // Pattern 1: Exact POI pin !8m2!3d35.6311555!4d139.7787019 or !3d35.6311555!4d139.7787019 or !3d35.6311555\x214d139.7787019
+    final pExactPin = RegExp(r'!3d(-?\d+\.\d+)(?:!|\\x21|/)*4d(-?\d+\.\d+)').firstMatch(str);
     if (pExactPin != null) {
       final lat = double.tryParse(pExactPin.group(1)!);
       final lng = double.tryParse(pExactPin.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 
-    // Pattern 2: Viewport center @35.6268,139.7766
+    // Pattern 2: q=35.6268,139.7766 or ll=35.6268,139.7766 or query=35.6268,139.7766
+    final pQ = RegExp(r'[?&](?:q|ll|query)=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
+    if (pQ != null) {
+      final lat = double.tryParse(pQ.group(1)!);
+      final lng = double.tryParse(pQ.group(2)!);
+      if (lat != null && lng != null) return [lat, lng];
+    }
+
+    // Pattern 3: Raw coordinate input string (e.g. 24.9144, 121.1467)
+    final pRaw = RegExp(r'^\s*(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})\s*$').firstMatch(str);
+    if (pRaw != null) {
+      final lat = double.tryParse(pRaw.group(1)!);
+      final lng = double.tryParse(pRaw.group(2)!);
+      if (lat != null && lng != null) return [lat, lng];
+    }
+
+    return null;
+  }
+
+  /// Extracts viewport camera center coordinates (@35.6268,139.7766 or center=35.6268,139.7766)
+  static List<double>? _extractViewportCoordinates(String str) {
+    // Pattern 1: Viewport center @35.6268,139.7766
     final pAt = RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(str);
     if (pAt != null) {
       final lat = double.tryParse(pAt.group(1)!);
@@ -179,27 +230,11 @@ class GoogleMapsParser {
       if (lat != null && lng != null) return [lat, lng];
     }
 
-    // Pattern 3: center=35.6268%2C139.7766 or center=35.6268,139.7766
+    // Pattern 2: center=35.6268%2C139.7766 or center=35.6268,139.7766
     final pCenter = RegExp(r'center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
     if (pCenter != null) {
       final lat = double.tryParse(pCenter.group(1)!);
       final lng = double.tryParse(pCenter.group(2)!);
-      if (lat != null && lng != null) return [lat, lng];
-    }
-
-    // Pattern 4: q=35.6268,139.7766 or ll=35.6268,139.7766
-    final pQ = RegExp(r'(?:q|ll|query)=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
-    if (pQ != null) {
-      final lat = double.tryParse(pQ.group(1)!);
-      final lng = double.tryParse(pQ.group(2)!);
-      if (lat != null && lng != null) return [lat, lng];
-    }
-
-    // Pattern 5: Raw 35.6268, 139.7766
-    final pRaw = RegExp(r'(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})').firstMatch(str);
-    if (pRaw != null) {
-      final lat = double.tryParse(pRaw.group(1)!);
-      final lng = double.tryParse(pRaw.group(2)!);
       if (lat != null && lng != null) return [lat, lng];
     }
 

@@ -8,6 +8,8 @@ import '../data/sample_data.dart';
 
 enum MapTileStyle {
   light,
+  pastelPink,
+  macaronCream,
   dark,
   osm,
   satellite,

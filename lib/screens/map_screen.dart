@@ -304,6 +304,10 @@ class _MapScreenState extends State<MapScreen> {
 
   String _getTileUrl(MapTileStyle style) {
     switch (style) {
+      case MapTileStyle.pastelPink:
+        return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png';
+      case MapTileStyle.macaronCream:
+        return 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
       case MapTileStyle.light:
         return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
       case MapTileStyle.dark:
@@ -678,14 +682,21 @@ class _MapScreenState extends State<MapScreen> {
                         icon: const Icon(Icons.layers, size: 20),
                         items: const [
                           DropdownMenuItem(
-                              value: MapTileStyle.light, child: Text('極簡亮色')),
+                              value: MapTileStyle.pastelPink,
+                              child: Text('🌸 夢幻馬卡龍 (粉彩無字)')),
                           DropdownMenuItem(
-                              value: MapTileStyle.dark, child: Text('霓虹暗黑')),
+                              value: MapTileStyle.macaronCream,
+                              child: Text('🍵 暖色手帳 (奶茶無字)')),
                           DropdownMenuItem(
-                              value: MapTileStyle.osm, child: Text('經典地圖')),
+                              value: MapTileStyle.light,
+                              child: Text('✨ 經典馬卡龍 (Voyager)')),
+                          DropdownMenuItem(
+                              value: MapTileStyle.dark, child: Text('🌙 霓虹暗黑')),
+                          DropdownMenuItem(
+                              value: MapTileStyle.osm, child: Text('🗺️ 經典地圖')),
                           DropdownMenuItem(
                               value: MapTileStyle.satellite,
-                              child: Text('衛星地圖')),
+                              child: Text('🛰️ 衛星地圖')),
                         ],
                         onChanged: (val) {
                           if (val != null) provider.setTileStyle(val);

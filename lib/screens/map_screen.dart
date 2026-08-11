@@ -323,6 +323,7 @@ class _MapScreenState extends State<MapScreen> {
       BuildContext context, TripProvider provider) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -330,101 +331,120 @@ class _MapScreenState extends State<MapScreen> {
         final styles = [
           {
             'style': MapTileStyle.pastelPink,
-            'label': '🌸 夢幻粉彩',
+            'label': '夢幻粉彩',
             'desc': '柔和粉紅與珊瑚暖海配色'
           },
           {
             'style': MapTileStyle.macaronCream,
-            'label': '🍵 暖色奶茶',
+            'label': '暖色奶茶',
             'desc': '溫暖奶茶手帳無字色調'
           },
           {
             'style': MapTileStyle.light,
-            'label': '✨ 經典馬卡龍',
+            'label': '經典馬卡龍',
             'desc': 'CartoDB 經典 Voyager 地圖'
           },
           {
             'style': MapTileStyle.dark,
-            'label': '🌙 霓虹暗黑',
+            'label': '霓虹暗黑',
             'desc': '夜間高對比風格'
           },
           {
             'style': MapTileStyle.osm,
-            'label': '🗺️ 經典地圖',
+            'label': '經典地圖',
             'desc': 'OpenStreetMap 傳統樣式'
           },
           {
             'style': MapTileStyle.satellite,
-            'label': '🛰️ 衛星地圖',
+            'label': '衛星地圖',
             'desc': '高清實景衛星圖'
           },
         ];
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.layers_rounded, color: Colors.indigo),
-                  const SizedBox(width: 8),
-                  Text(
-                    '選擇地圖配色風格',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...styles.map((item) {
-                final MapTileStyle style = item['style'] as MapTileStyle;
-                final String label = item['label'] as String;
-                final String desc = item['desc'] as String;
-                final bool isSelected = provider.tileStyle == style;
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.layers_rounded, color: Colors.indigo),
+                    const SizedBox(width: 8),
+                    Text(
+                      '選擇地圖配色風格',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: styles.map((item) {
+                        final MapTileStyle style = item['style'] as MapTileStyle;
+                        final String label = item['label'] as String;
+                        final String desc = item['desc'] as String;
+                        final bool isSelected = provider.tileStyle == style;
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.indigo.withAlpha(20)
-                        : Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? Colors.indigo : Colors.grey.shade300,
-                      width: isSelected ? 2 : 1,
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.indigo.withAlpha(20)
+                                : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.indigo
+                                  : Colors.grey.shade300,
+                              width: isSelected ? 2 : 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 2),
+                            dense: true,
+                            title: Text(
+                              label,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color:
+                                    isSelected ? Colors.indigo : Colors.black87,
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Text(desc,
+                                style: const TextStyle(fontSize: 11)),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle,
+                                    color: Colors.indigo, size: 20)
+                                : null,
+                            onTap: () {
+                              provider.setTileStyle(style);
+                              Navigator.pop(context);
+                            },
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 4),
-                    title: Text(
-                      label,
-                      style: TextStyle(
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.indigo : Colors.black87,
-                      ),
-                    ),
-                    subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle, color: Colors.indigo)
-                        : null,
-                    onTap: () {
-                      provider.setTileStyle(style);
-                      Navigator.pop(context);
-                    },
-                  ),
-                );
-              }),
-            ],
+                ),
+              ],
+            ),
           ),
         );
       },

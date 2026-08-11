@@ -322,11 +322,14 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showAddDialog({double? lat, double? lng}) {
-    showDialog(
+  void _showAddDialog({double? lat, double? lng}) async {
+    final newLandmark = await showDialog<Landmark>(
       context: context,
       builder: (context) => AddLandmarkDialog(initialLat: lat, initialLng: lng),
     );
+    if (newLandmark != null) {
+      _mapController.move(newLandmark.location, 15.5);
+    }
   }
 
   String _getTileUrl(MapTileStyle style) {

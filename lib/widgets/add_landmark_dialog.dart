@@ -127,9 +127,29 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
         _selectedLng = result.longitude;
         _tabController.animateTo(2); // Jump to Form Tab
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('成功解析 Google 地圖連結經緯度與名稱！')),
-      );
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (result.resolutionMethod == 'viewport_coords') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
+            content: Text(
+              '⚠️ 提醒：此網址僅包含視角中心點 (${result.latitude.toStringAsFixed(4)}, ${result.longitude.toStringAsFixed(4)})\n若欲定位特定店家，請在 Google 地圖點選「特定店家地標圖示」再點「分享」複製連結！',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(seconds: 3),
+            content: Text(
+              '🎉 成功精準解析地標：「${result.name}」！\n📍 座標：${result.latitude.toStringAsFixed(5)}, ${result.longitude.toStringAsFixed(5)}',
+            ),
+          ),
+        );
+      }
     } else {
       setState(() {
         _parseError = '無法解析此連結或經緯度格式，請確認網址或使用關鍵字搜尋。';
@@ -187,9 +207,9 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
     );
 
     context.read<TripProvider>().addLandmark(newLandmark);
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(newLandmark);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已成功新增「${newLandmark.name}」到行程！')),
+      SnackBar(content: Text('🎉 已成功新增「${newLandmark.name}」到行程！')),
     );
   }
 

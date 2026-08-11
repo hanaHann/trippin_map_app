@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/landmark.dart';
 import '../providers/trip_provider.dart';
@@ -75,6 +76,34 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
     _addressController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handlePasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data != null && data.text != null && data.text!.isNotEmpty) {
+      setState(() {
+        _linkController.text = data.text!;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📋 已自動貼上剪貼簿內容！'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ 剪貼簿中沒有文字內容'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleParseLink() async {
@@ -233,13 +262,27 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                         TextField(
                           controller: _linkController,
                           maxLines: 2,
+                          onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
                             hintText: '在此貼上 Google 地圖分享網址...',
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12)),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => _linkController.clear(),
+                            suffixIcon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.paste_rounded,
+                                      color: Colors.indigo),
+                                  tooltip: '貼上剪貼簿內容',
+                                  onPressed: _handlePasteFromClipboard,
+                                ),
+                                if (_linkController.text.isNotEmpty)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () =>
+                                        setState(() => _linkController.clear()),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
@@ -249,20 +292,46 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                               style: const TextStyle(color: Colors.red)),
                         ],
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed:
-                                _isParsingLink ? null : _handleParseLink,
-                            icon: _isParsingLink
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                                : const Icon(Icons.bolt),
-                            label: const Text('自動解析地點與座標'),
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _handlePasteFromClipboard,
+                                icon: const Icon(Icons.paste_rounded,
+                                    color: Colors.indigo),
+                                label: const Text('貼上剪貼簿'),
+                                style: OutlinedButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    _isParsingLink ? null : _handleParseLink,
+                                icon: _isParsingLink
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2))
+                                    : const Icon(Icons.bolt),
+                                label: const Text('自動解析地點'),
+                                style: ElevatedButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

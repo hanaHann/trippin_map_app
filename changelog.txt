@@ -1,0 +1,50 @@
+========================================================================
+                      MapMap - CHANGELOG & VERSION HISTORY
+========================================================================
+
+[v1.0.2] - 2026-08-11 (Build 3)
+------------------------------------------------------------------------
+✨ 新功能 (New Features):
+  • 📷 可愛地圖圖片導出與一鍵分享 (Cute Map Image Export & Instant Share)
+    - 支援 3 倍高解析度截圖（包含常駐地標標籤、路線點、頂部標籤卡與浮水印）。
+    - 整合系統原生分享介面，可直推至 Instagram、LINE、微信、FB、小紅書與 AirDrop。
+  • 📱 全螢幕漢堡選單 (Full-Screen Hamburger Drawer Menu)
+    - 點擊漢堡選單即時以 100% 滿版展示，右上角新增顯眼關閉按鈕。
+  • 🔠 地標名稱橫列滿版 (Full-Width Landmark Title Layout)
+    - 地標卡片頂部改為滿版呈現名稱，擺脫傳統圖示左右擠壓問題。
+  • 👈 往左滑動刪除地點 (Swipe Left to Delete with Confirmation)
+    - 移除傳統卡片垃圾桶圖示，改為向左滑動彈出刪除確認視窗（防誤刪）。
+
+🐛 問題修復與解析器優化 (Bug Fixes & Engine Upgrades):
+  • 🔗 升級 Google Maps 網址解析引擎 (GoogleMapsParser Engine Upgrade)
+    - 增加多層智慧百分比編碼（Percent-encoding）與 + 號空格還原解碼（如「木村堂 楊梅店」）。
+    - 支援複製帶有前置/後置名稱的分享文字（如「東京晴空塔」 https://maps.app.goo.gl/...）。
+    - 修正英文與特殊地標名稱被過往逆向地理編碼覆蓋的 Bug。
+  • 🗺️ Google 地圖搜尋導航 (Search Navigation by Place Name)
+    - 導航開起改用景點名稱與地址搜尋，讓 Google 地圖直接開啟官方景點卡片與照片。
+  • 🧭 旋轉感知指北針回正 (Rotation-aware Compass North Reset)
+    - AppBar 與浮動按鈕區新增指北針圖示，地圖旋轉時同步旋轉，點擊即可一鍵回正至正北。
+
+
+[v1.0.1] - 2026-08-10 (Build 2)
+------------------------------------------------------------------------
+✨ 新功能 & 設定調整 (Features & Improvements):
+  • 📅 行程總天數自訂與修改 (Trip Total Days & Editing)
+    - 支援自訂行程總天數 (1-30天)，建立後隨時可修改天數與名稱。
+  • 📍 標籤卡片尺寸擴充 (Map Badge Expansion)
+    - 地圖常駐標籤卡片寬度擴充至 220x100，支援長名稱多列自動換行顯示。
+  • 🎨 路線點連線標記 (Route Dots Indicator)
+    - 點對點連線上加入中間航點圓點與節點標示。
+  • 💰 AdMob 廣告整合 (Google AdMob SDK Integration)
+    - 整合真實 App ID 與底部 Banner 廣告模組。
+
+🐛 系統修復 (System Fixes):
+  • 🍎 iOS CocoaPods 編譯配置修復 (Podfile linkage set to static).
+
+
+[v1.0.0] - 2026-08-01 (Build 1)
+------------------------------------------------------------------------
+🎉 首次發布 (Initial Release):
+  • 自訂行程地標新增、刪除與拖曳排序功能。
+  • Google Maps 痛點解法：在地圖上常駐顯示自訂地標名稱標籤，屏蔽雜項地標。
+  • 支援極簡亮色、霓虹暗黑、經典與衛星等多種地圖切換。

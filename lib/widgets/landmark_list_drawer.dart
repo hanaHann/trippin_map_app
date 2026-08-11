@@ -196,10 +196,6 @@ class LandmarkListDrawer extends StatelessWidget {
                             const TextStyle(color: Colors.white, fontSize: 11),
                       ),
                     ),
-                    const Text(
-                      '按住右側 ☰ 拖曳排順序 | 👈 往左滑可刪除地點',
-                      style: TextStyle(color: Colors.white70, fontSize: 11),
-                    ),
                   ],
                 ),
               ],

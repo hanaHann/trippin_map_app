@@ -279,7 +279,7 @@ class _MapScreenState extends State<MapScreen> {
   void _zoomToFitAll(List<Landmark> landmarks) {
     if (landmarks.isEmpty) return;
     if (landmarks.length == 1) {
-      _mapController.move(landmarks.first.location, 14.0);
+      _mapController.move(landmarks.first.location, 14.5);
       return;
     }
 
@@ -290,7 +290,13 @@ class _MapScreenState extends State<MapScreen> {
     _mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(50.0),
+        padding: const EdgeInsets.only(
+          top: 120.0,
+          bottom: 120.0,
+          left: 100.0,
+          right: 100.0,
+        ),
+        maxZoom: 16.0,
       ),
     );
   }

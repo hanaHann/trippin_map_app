@@ -394,12 +394,12 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: RepaintBoundary(
-        key: _repaintKey,
-        child: Stack(
-          children: [
-            // FlutterMap Tile Engine
-            FlutterMap(
+      body: Stack(
+        children: [
+          // Pure Map Layer wrapped in RepaintBoundary (Only captures map, markers, and route lines/dots)
+          RepaintBoundary(
+            key: _repaintKey,
+            child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: initialCenter,
@@ -607,144 +607,89 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
+          ),
 
-            // Cute Top Title Tag Overlay (Included in Captured Map)
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(225),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
+          // Interactive UI Controls (Excluded from RepaintBoundary)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Card(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    child: DropdownButton<MapTileStyle>(
+                      value: provider.tileStyle,
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.layers, size: 20),
+                      items: const [
+                        DropdownMenuItem(
+                            value: MapTileStyle.pastelPink,
+                            child: Text('🌸 夢幻馬卡龍 (粉彩無字)')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.macaronCream,
+                            child: Text('🍵 暖色手帳 (奶茶無字)')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.light,
+                            child: Text('✨ 經典馬卡龍 (Voyager)')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.dark, child: Text('🌙 霓虹暗黑')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.osm, child: Text('🗺️ 經典地圖')),
+                        DropdownMenuItem(
+                            value: MapTileStyle.satellite,
+                            child: Text('🛰️ 衛星地圖')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) provider.setTileStyle(val);
+                      },
                     ),
-                  ],
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.stars_rounded,
-                        color: Colors.amber, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      activeTrip?.title ?? '我的可愛地圖',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: Colors.indigo,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'btn_compass_reset',
+                  tooltip: '指北針回正',
+                  backgroundColor: _currentRotation.abs() > 0.5
+                      ? Colors.redAccent
+                      : Colors.white,
+                  foregroundColor: _currentRotation.abs() > 0.5
+                      ? Colors.white
+                      : Colors.indigo,
+                  onPressed: _resetCompassNorth,
+                  child: Transform.rotate(
+                    angle: -_currentRotation * (math.pi / 180),
+                    child: const Icon(Icons.explore),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 6),
+                FloatingActionButton.small(
+                  heroTag: 'btn_zoom_in',
+                  onPressed: () {
+                    final zoom = _mapController.camera.zoom + 1.0;
+                    _mapController.move(
+                        _mapController.camera.center, zoom);
+                  },
+                  child: const Icon(Icons.add),
+                ),
+                const SizedBox(height: 6),
+                FloatingActionButton.small(
+                  heroTag: 'btn_zoom_out',
+                  onPressed: () {
+                    final zoom = _mapController.camera.zoom - 1.0;
+                    _mapController.move(
+                        _mapController.camera.center, zoom);
+                  },
+                  child: const Icon(Icons.remove),
+                ),
+              ],
             ),
-
-            // Bottom Right Watermark Tag (Included in Captured Map)
-            Positioned(
-              bottom: 60,
-              right: 12,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(140),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'MapMap 🗺️ 可愛的常駐標籤地圖',
-                  style: TextStyle(color: Colors.white70, fontSize: 10),
-                ),
-              ),
-            ),
-
-            // Tile Style & Floating Controls (Zoom + Compass Reset)
-            Positioned(
-              top: 16,
-              right: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Card(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      child: DropdownButton<MapTileStyle>(
-                        value: provider.tileStyle,
-                        underline: const SizedBox(),
-                        icon: const Icon(Icons.layers, size: 20),
-                        items: const [
-                          DropdownMenuItem(
-                              value: MapTileStyle.pastelPink,
-                              child: Text('🌸 夢幻馬卡龍 (粉彩無字)')),
-                          DropdownMenuItem(
-                              value: MapTileStyle.macaronCream,
-                              child: Text('🍵 暖色手帳 (奶茶無字)')),
-                          DropdownMenuItem(
-                              value: MapTileStyle.light,
-                              child: Text('✨ 經典馬卡龍 (Voyager)')),
-                          DropdownMenuItem(
-                              value: MapTileStyle.dark, child: Text('🌙 霓虹暗黑')),
-                          DropdownMenuItem(
-                              value: MapTileStyle.osm, child: Text('🗺️ 經典地圖')),
-                          DropdownMenuItem(
-                              value: MapTileStyle.satellite,
-                              child: Text('🛰️ 衛星地圖')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) provider.setTileStyle(val);
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FloatingActionButton.small(
-                    heroTag: 'btn_compass_reset',
-                    tooltip: '指北針回正',
-                    backgroundColor: _currentRotation.abs() > 0.5
-                        ? Colors.redAccent
-                        : Colors.white,
-                    foregroundColor: _currentRotation.abs() > 0.5
-                        ? Colors.white
-                        : Colors.indigo,
-                    onPressed: _resetCompassNorth,
-                    child: Transform.rotate(
-                      angle: -_currentRotation * (math.pi / 180),
-                      child: const Icon(Icons.explore),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  FloatingActionButton.small(
-                    heroTag: 'btn_zoom_in',
-                    onPressed: () {
-                      final zoom = _mapController.camera.zoom + 1.0;
-                      _mapController.move(
-                          _mapController.camera.center, zoom);
-                    },
-                    child: const Icon(Icons.add),
-                  ),
-                  const SizedBox(height: 6),
-                  FloatingActionButton.small(
-                    heroTag: 'btn_zoom_out',
-                    onPressed: () {
-                      final zoom = _mapController.camera.zoom - 1.0;
-                      _mapController.move(
-                          _mapController.camera.center, zoom);
-                    },
-                    child: const Icon(Icons.remove),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
 
       // FAB to Add Landmark

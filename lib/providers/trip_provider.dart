@@ -156,6 +156,41 @@ class TripProvider with ChangeNotifier {
     _updateActiveTripLandmarks(updatedLandmarks);
   }
 
+  void updateAllLandmarks(List<Landmark> newLandmarks) {
+    _updateActiveTripLandmarks(newLandmarks);
+  }
+
+  void updateLandmarkDay(String landmarkId, int newDay) {
+    final trip = activeTrip;
+    if (trip == null) return;
+
+    final updatedLandmarks = trip.landmarks.map((l) {
+      if (l.id == landmarkId) {
+        return l.copyWith(day: newDay);
+      }
+      return l;
+    }).toList();
+
+    _updateActiveTripLandmarks(updatedLandmarks);
+  }
+
+  void swapDays(int dayA, int dayB) {
+    final trip = activeTrip;
+    if (trip == null || dayA == dayB) return;
+
+    final updatedLandmarks = trip.landmarks.map((l) {
+      if (l.day == dayA) {
+        return l.copyWith(day: dayB);
+      } else if (l.day == dayB) {
+        return l.copyWith(day: dayA);
+      }
+      return l;
+    }).toList();
+
+    updatedLandmarks.sort((a, b) => a.day.compareTo(b.day));
+    _updateActiveTripLandmarks(updatedLandmarks);
+  }
+
   void reorderLandmarks(int oldIndex, int newIndex) {
     final trip = activeTrip;
     if (trip == null) return;
@@ -168,12 +203,23 @@ class TripProvider with ChangeNotifier {
       var item = landmarks.removeAt(oldIndex);
       landmarks.insert(newIndex, item);
 
-      // Automatically assign target day when dragging across days
+      // Robust target day determination:
       int targetDay = item.day;
-      if (newIndex > 0) {
-        targetDay = landmarks[newIndex - 1].day;
-      } else if (landmarks.length > 1) {
-        targetDay = landmarks[1].day;
+      if (landmarks.length > 1) {
+        if (newIndex == 0) {
+          targetDay = landmarks[1].day;
+        } else if (newIndex == landmarks.length - 1) {
+          targetDay = landmarks[newIndex - 1].day;
+        } else {
+          final prevDay = landmarks[newIndex - 1].day;
+          final nextDay = landmarks[newIndex + 1].day;
+          if (prevDay == nextDay) {
+            targetDay = prevDay;
+          } else {
+            // Placed at boundary before nextDay section
+            targetDay = nextDay;
+          }
+        }
       }
 
       if (item.day != targetDay) {
@@ -212,6 +258,17 @@ class TripProvider with ChangeNotifier {
     }
   }
 
+  Future<void> resetToSampleData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_trips');
+    await prefs.remove('active_trip_id');
+    _trips = sampleTrips;
+    _activeTripId = sampleTrips.first.id;
+    _selectedDayFilter = null;
+    notifyListeners();
+    await _saveToPrefs();
+  }
+
   Future<void> _loadTrips() async {
     final prefs = await SharedPreferences.getInstance();
     final String? tripsJson = prefs.getString('saved_trips');
@@ -219,7 +276,15 @@ class TripProvider with ChangeNotifier {
     if (tripsJson != null) {
       try {
         final List<dynamic> decoded = jsonDecode(tripsJson);
-        _trips = decoded.map((item) => Trip.fromJson(item)).toList();
+        _trips = decoded.map((item) => Trip.fromJson(item)).map((t) {
+          if (t.id == 'tokyo-sample' && t.title == '東京 5 天 4 夜精華行程') {
+            return t.copyWith(title: '【範例】東京 5 天 4 夜精華行程');
+          }
+          if (t.id == 'kyoto-sample' && t.title == '京都古都巡禮與咖啡散策') {
+            return t.copyWith(title: '【範例】京都古都巡禮與咖啡散策');
+          }
+          return t;
+        }).toList();
         _activeTripId = prefs.getString('active_trip_id');
       } catch (e) {
         _trips = sampleTrips;
@@ -228,7 +293,8 @@ class TripProvider with ChangeNotifier {
       _trips = sampleTrips;
     }
 
-    if (_trips.isNotEmpty && (_activeTripId == null || !_trips.any((t) => t.id == _activeTripId))) {
+    if (_trips.isNotEmpty &&
+        (_activeTripId == null || !_trips.any((t) => t.id == _activeTripId))) {
       _activeTripId = _trips.first.id;
     }
 

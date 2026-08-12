@@ -4,7 +4,7 @@ import '../models/landmark.dart';
 final List<Trip> sampleTrips = [
   Trip(
     id: 'tokyo-sample',
-    title: '東京 5 天 4 夜精華行程',
+    title: '【範例】東京 5 天 4 夜精華行程',
     description: '常駐顯示地點名稱，完全屏蔽其他雜亂星號，掌握東京縱貫線地標動線',
     landmarks: [
       Landmark(
@@ -71,7 +71,7 @@ final List<Trip> sampleTrips = [
   ),
   Trip(
     id: 'kyoto-sample',
-    title: '京都古都巡禮與咖啡散策',
+    title: '【範例】京都古都巡禮與咖啡散策',
     description: '清晰顯示景點相對距離與動線，避開 Google 地圖過密視覺影響',
     landmarks: [
       Landmark(

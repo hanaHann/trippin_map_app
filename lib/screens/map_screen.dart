@@ -489,6 +489,20 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  LatLng _calculatePolylineMidpoint(List<LatLng> points) {
+    if (points.isEmpty) return const LatLng(0, 0);
+    if (points.length == 1) return points.first;
+
+    final midIndex = points.length ~/ 2;
+    final p1 = points[midIndex - 1];
+    final p2 = points[midIndex];
+
+    return LatLng(
+      (p1.latitude + p2.latitude) / 2,
+      (p1.longitude + p2.longitude) / 2,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TripProvider>();
@@ -507,17 +521,54 @@ class _MapScreenState extends State<MapScreen> {
 
     final List<Polyline> dayPolylines = [];
     final List<CircleMarker> dayCircles = [];
+    final List<Marker> dayRouteLabelMarkers = [];
 
     if (provider.showRouteLines) {
       landmarksByDay.forEach((day, dayLandmarks) {
         final dayColor = getDayColor(day);
 
         if (dayLandmarks.length > 1) {
+          final points = dayLandmarks.map((l) => l.location).toList();
           dayPolylines.add(
             Polyline(
-              points: dayLandmarks.map((l) => l.location).toList(),
+              points: points,
               color: dayColor.withAlpha(220),
               strokeWidth: 4.5,
+            ),
+          );
+
+          // Route Label Marker (e.g. 第 1 天, 第 2 天)
+          final midPoint = _calculatePolylineMidpoint(points);
+          dayRouteLabelMarkers.add(
+            Marker(
+              point: midPoint,
+              width: 76,
+              height: 26,
+              alignment: Alignment.center,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: dayColor, width: 1.8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 3,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  '第 $day 天',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: dayColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
             ),
           );
 
@@ -647,6 +698,9 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   CircleLayer(
                     circles: dayCircles,
+                  ),
+                  MarkerLayer(
+                    markers: dayRouteLabelMarkers,
                   ),
                 ],
 

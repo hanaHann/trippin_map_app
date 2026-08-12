@@ -729,9 +729,10 @@ class _MapScreenState extends State<MapScreen> {
                         },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            // Permanent Label Badge (Border matches Day Color)
-                            if (provider.showPermanentLabels)
+                            // Permanent Text Label Badge (Placed cleanly ABOVE Number Circle)
+                            if (provider.showPermanentLabels) ...[
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
@@ -752,9 +753,7 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                                 constraints: const BoxConstraints(maxWidth: 220),
                                 child: Text(
-                                  provider.selectedDayFilter == null
-                                      ? '第 ${landmark.day} 天 · ${landmark.name}'
-                                      : landmark.name,
+                                  landmark.name,
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -766,9 +765,10 @@ class _MapScreenState extends State<MapScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                               ),
+                              const SizedBox(height: 6),
+                            ],
 
-                            // Increase spacing between text label badge and number circle so text label sits higher up away from route lines
-                            const SizedBox(height: 10),
+                            // Map Number Circle Pin (Sits directly right above route dot)
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
@@ -791,7 +791,7 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
-                            // Small gap spacer so number circle sits snug right above route dot!
+                            // 2px gap spacer to route dot
                             const SizedBox(height: 2),
                           ],
                         ),
@@ -869,9 +869,7 @@ class _MapScreenState extends State<MapScreen> {
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        provider.selectedDayFilter == null
-                                            ? '第 ${landmark.day} 天 · ${landmark.name}'
-                                            : landmark.name,
+                                        landmark.name,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,

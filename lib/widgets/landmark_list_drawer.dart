@@ -291,7 +291,7 @@ class LandmarkListDrawer extends StatelessWidget {
                                     color: dayColor.withAlpha(80), width: 1),
                               ),
                               child: Text(
-                                '--- 第 ${item.day} 天 ---',
+                                '第 ${item.day} 天',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,

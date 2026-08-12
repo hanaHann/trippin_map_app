@@ -767,8 +767,8 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
 
-                            // Map Pin Icon Badge (Background matches Day Color)
-                            const SizedBox(height: 2),
+                            // Increase spacing between text label badge and number circle so text label sits higher up away from route lines
+                            const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
@@ -791,8 +791,8 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
-                            // Gap spacer to lift number circle & text label badge uniformly ABOVE the route point!
-                            const SizedBox(height: 6),
+                            // Small gap spacer so number circle sits snug right above route dot!
+                            const SizedBox(height: 2),
                           ],
                         ),
                       ),

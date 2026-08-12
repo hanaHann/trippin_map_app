@@ -269,9 +269,37 @@ class LandmarkListDrawer extends StatelessWidget {
                         );
                       }
 
+                      final showDayHeader = provider.selectedDayFilter == null &&
+                          (index == 0 ||
+                              landmarks[index].day != landmarks[index - 1].day);
+
                       return Column(
                         key: ValueKey(item.id),
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (showDayHeader)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 16),
+                              margin: const EdgeInsets.only(
+                                  top: 10, bottom: 4, left: 10, right: 10),
+                              decoration: BoxDecoration(
+                                color: dayColor.withAlpha(25),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: dayColor.withAlpha(80), width: 1),
+                              ),
+                              child: Text(
+                                '--- 第 ${item.day} 天 ---',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: dayColor,
+                                ),
+                              ),
+                            ),
                           Dismissible(
                             key: ValueKey(item.id),
                             direction: DismissDirection.endToStart,
@@ -374,39 +402,14 @@ class LandmarkListDrawer extends StatelessWidget {
                                                   fontSize: 16)),
                                           const SizedBox(width: 6),
                                           Expanded(
-                                            child: Wrap(
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              children: [
-                                                Text(
-                                                  item.name,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 15,
-                                                    height: 1.3,
-                                                  ),
-                                                ),
-                                                if (provider.selectedDayFilter == null) ...[
-                                                  const SizedBox(width: 6),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                        horizontal: 6, vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: dayColor.withAlpha(30),
-                                                      borderRadius: BorderRadius.circular(6),
-                                                      border: Border.all(
-                                                          color: dayColor, width: 1),
-                                                    ),
-                                                    child: Text(
-                                                      '第 ${item.day} 天',
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: dayColor,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
+                                            child: Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                                height: 1.3,
+                                              ),
+                                              softWrap: true,
                                             ),
                                           ),
                                           const SizedBox(width: 8),

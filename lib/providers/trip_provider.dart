@@ -54,7 +54,11 @@ class TripProvider with ChangeNotifier {
   List<Landmark> get currentLandmarks {
     final trip = activeTrip;
     if (trip == null) return [];
-    if (_selectedDayFilter == null) return trip.landmarks;
+    if (_selectedDayFilter == null) {
+      final sorted = List<Landmark>.from(trip.landmarks);
+      sorted.sort((a, b) => a.day.compareTo(b.day));
+      return sorted;
+    }
     return trip.landmarks.where((l) => l.day == _selectedDayFilter).toList();
   }
 

@@ -338,6 +338,55 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  bool _isWelcomeDialogShowing = false;
+
+  void _showWelcomeDialog(BuildContext context, TripProvider provider) {
+    if (_isWelcomeDialogShowing) return;
+    _isWelcomeDialogShowing = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Text('🌸 ', style: TextStyle(fontSize: 22)),
+            Text('歡迎使用 MapMap！', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          '是否要為您匯入「東京 5 天 4 夜」與「京都古都巡禮」的【範例行程】供您參考？',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () {
+              _isWelcomeDialogShowing = false;
+              Navigator.of(dialogContext).pop();
+              provider.startWithEmptyTrip();
+            },
+            child: const Text('建立空白新行程', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              _isWelcomeDialogShowing = false;
+              Navigator.of(dialogContext).pop();
+              provider.importSampleTrips();
+            },
+            child: const Text('匯入範例行程'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddDialog({double? lat, double? lng}) async {
     final newLandmark = await showDialog<Landmark>(
       context: context,
@@ -509,6 +558,14 @@ class _MapScreenState extends State<MapScreen> {
     final provider = context.watch<TripProvider>();
     final activeTrip = provider.activeTrip;
     final landmarks = provider.currentLandmarks;
+
+    if (provider.isFirstTimeUser) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && provider.isFirstTimeUser) {
+          _showWelcomeDialog(context, provider);
+        }
+      });
+    }
 
     if (activeTrip != null &&
         _lastFittedTripId != activeTrip.id &&

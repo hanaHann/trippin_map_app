@@ -258,20 +258,66 @@ class TripProvider with ChangeNotifier {
     }
   }
 
+  bool _isFirstTimeUser = false;
+  bool get isFirstTimeUser => _isFirstTimeUser;
+
+  Future<void> importSampleTrips() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_prompted_first_time', true);
+    _isFirstTimeUser = false;
+    _trips = sampleTrips;
+    _activeTripId = sampleTrips.first.id;
+    notifyListeners();
+    await _saveToPrefs();
+  }
+
+  Future<void> startWithEmptyTrip() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_prompted_first_time', true);
+    _isFirstTimeUser = false;
+    if (_trips.isEmpty) {
+      _trips = [
+        Trip(
+          id: 'my-first-trip',
+          title: '我的第一個行程',
+          description: '歡迎開始規劃您的第一趟行程',
+          totalDays: 3,
+          landmarks: [],
+          createdAt: DateTime.now(),
+        )
+      ];
+    }
+    _activeTripId = _trips.first.id;
+    notifyListeners();
+    await _saveToPrefs();
+  }
+
   Future<void> resetToSampleData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('saved_trips');
     await prefs.remove('active_trip_id');
-    _trips = sampleTrips;
-    _activeTripId = sampleTrips.first.id;
+    await prefs.remove('has_prompted_first_time');
+    _isFirstTimeUser = true;
+    _trips = [
+      Trip(
+        id: 'my-first-trip',
+        title: '我的第一個行程',
+        description: '歡迎開始規劃您的第一趟行程',
+        totalDays: 3,
+        landmarks: [],
+        createdAt: DateTime.now(),
+      )
+    ];
+    _activeTripId = _trips.first.id;
     _selectedDayFilter = null;
     notifyListeners();
-    await _saveToPrefs();
   }
 
   Future<void> _loadTrips() async {
     final prefs = await SharedPreferences.getInstance();
     final String? tripsJson = prefs.getString('saved_trips');
+    final bool hasPromptedFirstTime =
+        prefs.getBool('has_prompted_first_time') ?? false;
 
     if (tripsJson != null) {
       try {
@@ -289,6 +335,18 @@ class TripProvider with ChangeNotifier {
       } catch (e) {
         _trips = sampleTrips;
       }
+    } else if (!hasPromptedFirstTime) {
+      _isFirstTimeUser = true;
+      _trips = [
+        Trip(
+          id: 'my-first-trip',
+          title: '我的第一個行程',
+          description: '歡迎開始規劃您的第一趟行程',
+          totalDays: 3,
+          landmarks: [],
+          createdAt: DateTime.now(),
+        )
+      ];
     } else {
       _trips = sampleTrips;
     }

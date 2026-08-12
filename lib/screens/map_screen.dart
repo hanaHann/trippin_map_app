@@ -668,8 +668,8 @@ class _MapScreenState extends State<MapScreen> {
                     return Marker(
                       point: landmark.location,
                       width: 220,
-                      height: 100,
-                      alignment: Alignment.topCenter,
+                      height: 120,
+                      alignment: Alignment.bottomCenter,
                       child: GestureDetector(
                         onTap: () {
                           showModalBottomSheet(
@@ -734,11 +734,9 @@ class _MapScreenState extends State<MapScreen> {
                         },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            // 6px Gap below Route Location Dot (at top)
-                            const SizedBox(height: 6),
-
-                            // [Middle]: Permanent Text Label Badge (Landmark Name)
+                            // [Top]: 🏷️ Landmark Name Card (Floats high above, clear of route lines)
                             if (provider.showPermanentLabels) ...[
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -772,10 +770,10 @@ class _MapScreenState extends State<MapScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 10),
                             ],
 
-                            // [Bottom]: Map Number Circle Pin (Day Color Coded)
+                            // [Middle]: 🔴 Map Number Circle Pin (Near the route location dot)
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
@@ -798,6 +796,9 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
+
+                            // [Bottom]: 2px Gap to Route Location Dot at bottom
+                            const SizedBox(height: 2),
                           ],
                         ),
                       ),

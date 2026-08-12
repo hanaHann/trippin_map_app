@@ -764,6 +764,8 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
+                            // Gap spacer to lift number circle & text label badge uniformly ABOVE the route point!
+                            const SizedBox(height: 6),
                           ],
                         ),
                       ),

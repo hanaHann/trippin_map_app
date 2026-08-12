@@ -32,6 +32,7 @@ class _MapScreenState extends State<MapScreen> {
   late PageController _carouselPageController;
   double _currentRotation = 0.0;
   String? _selectedLandmarkId;
+  String? _lastFittedTripId;
 
   @override
   void initState() {
@@ -508,6 +509,17 @@ class _MapScreenState extends State<MapScreen> {
     final provider = context.watch<TripProvider>();
     final activeTrip = provider.activeTrip;
     final landmarks = provider.currentLandmarks;
+
+    if (activeTrip != null &&
+        _lastFittedTripId != activeTrip.id &&
+        landmarks.isNotEmpty) {
+      _lastFittedTripId = activeTrip.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _zoomToFitAll(landmarks);
+        }
+      });
+    }
 
     final initialCenter = landmarks.isNotEmpty
         ? landmarks.first.location

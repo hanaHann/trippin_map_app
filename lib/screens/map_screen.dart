@@ -656,6 +656,15 @@ class _MapScreenState extends State<MapScreen> {
                     final landmark = entry.value;
                     final dayColor = getDayColor(landmark.day);
 
+                    int dayIndex = 1;
+                    if (provider.selectedDayFilter == null) {
+                      final dayItems =
+                          landmarks.where((l) => l.day == landmark.day).toList();
+                      dayIndex = dayItems.indexOf(landmark) + 1;
+                    } else {
+                      dayIndex = index + 1;
+                    }
+
                     return Marker(
                       point: landmark.location,
                       width: 220,
@@ -699,24 +708,20 @@ class _MapScreenState extends State<MapScreen> {
                                       Expanded(
                                         child: ElevatedButton.icon(
                                           onPressed: () {
+                                            Navigator.of(context).pop();
                                             _openGoogleMapsNavigation(landmark);
                                           },
-                                          icon: const Icon(Icons.navigation,
-                                              color: Colors.white),
-                                          label: const Text('開啟 Google 地圖景點'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.blue,
-                                            foregroundColor: Colors.white,
-                                          ),
+                                          icon: const Icon(Icons.navigation),
+                                          label: const Text('Google 地圖導航'),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       IconButton(
                                         onPressed: () {
-                                          Navigator.pop(context);
+                                          Navigator.of(context).pop();
                                           provider.deleteLandmark(landmark.id);
                                         },
-                                        icon: const Icon(Icons.delete_outline,
+                                        icon: const Icon(Icons.delete,
                                             color: Colors.red),
                                         tooltip: '刪除此地標',
                                       ),
@@ -783,7 +788,7 @@ class _MapScreenState extends State<MapScreen> {
                                 ],
                               ),
                               child: Text(
-                                '${index + 1}',
+                                '$dayIndex',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -821,6 +826,16 @@ class _MapScreenState extends State<MapScreen> {
                   itemBuilder: (context, index) {
                     final landmark = landmarks[index];
                     final dayColor = getDayColor(landmark.day);
+                    int dayIndex = 1;
+                    if (provider.selectedDayFilter == null) {
+                      final dayItems = landmarks
+                          .where((l) => l.day == landmark.day)
+                          .toList();
+                      dayIndex = dayItems.indexOf(landmark) + 1;
+                    } else {
+                      dayIndex = index + 1;
+                    }
+
                     final distNext = index < landmarks.length - 1
                         ? provider.calculateDistanceKm(
                             landmark.location, landmarks[index + 1].location)
@@ -850,7 +865,7 @@ class _MapScreenState extends State<MapScreen> {
                             radius: 16,
                             backgroundColor: dayColor,
                             child: Text(
-                              '${index + 1}',
+                              '$dayIndex',
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold),

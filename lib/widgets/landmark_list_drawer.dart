@@ -273,6 +273,15 @@ class LandmarkListDrawer extends StatelessWidget {
                           (index == 0 ||
                               landmarks[index].day != landmarks[index - 1].day);
 
+                      int dayIndex = 1;
+                      if (provider.selectedDayFilter == null) {
+                        final dayItems =
+                            landmarks.where((l) => l.day == item.day).toList();
+                        dayIndex = dayItems.indexOf(item) + 1;
+                      } else {
+                        dayIndex = index + 1;
+                      }
+
                       return Column(
                         key: ValueKey(item.id),
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +397,7 @@ class LandmarkListDrawer extends StatelessWidget {
                                             radius: 14,
                                             backgroundColor: dayColor,
                                             child: Text(
-                                              '${index + 1}',
+                                              '$dayIndex',
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 12,

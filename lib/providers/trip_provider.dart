@@ -14,12 +14,18 @@ enum MapTileStyle {
   satellite,
 }
 
+enum LabelDisplayMode {
+  onMap, // Mode 1: 地圖常駐標籤
+  hidden, // Mode 2: 隱藏標籤
+  bottomDeck, // Mode 3: 螢幕下方橫向卡片列
+}
+
 class TripProvider with ChangeNotifier {
   List<Trip> _trips = [];
   String? _activeTripId;
 
   // Visual Map Controls
-  bool _showPermanentLabels = true;
+  LabelDisplayMode _labelDisplayMode = LabelDisplayMode.onMap;
   bool _showRouteLines = true;
   int? _selectedDayFilter;
   MapTileStyle _tileStyle = MapTileStyle.light;
@@ -39,7 +45,8 @@ class TripProvider with ChangeNotifier {
     );
   }
 
-  bool get showPermanentLabels => _showPermanentLabels;
+  LabelDisplayMode get labelDisplayMode => _labelDisplayMode;
+  bool get showPermanentLabels => _labelDisplayMode == LabelDisplayMode.onMap;
   bool get showRouteLines => _showRouteLines;
   int? get selectedDayFilter => _selectedDayFilter;
   MapTileStyle get tileStyle => _tileStyle;
@@ -51,9 +58,23 @@ class TripProvider with ChangeNotifier {
     return trip.landmarks.where((l) => l.day == _selectedDayFilter).toList();
   }
 
-  void togglePermanentLabels() {
-    _showPermanentLabels = !_showPermanentLabels;
+  void cycleLabelDisplayMode() {
+    switch (_labelDisplayMode) {
+      case LabelDisplayMode.onMap:
+        _labelDisplayMode = LabelDisplayMode.hidden;
+        break;
+      case LabelDisplayMode.hidden:
+        _labelDisplayMode = LabelDisplayMode.bottomDeck;
+        break;
+      case LabelDisplayMode.bottomDeck:
+        _labelDisplayMode = LabelDisplayMode.onMap;
+        break;
+    }
     notifyListeners();
+  }
+
+  void togglePermanentLabels() {
+    cycleLabelDisplayMode();
   }
 
   void toggleRouteLines() {
@@ -136,11 +157,32 @@ class TripProvider with ChangeNotifier {
     if (trip == null) return;
 
     if (newIndex > oldIndex) newIndex -= 1;
-    final landmarks = List<Landmark>.from(trip.landmarks);
-    final item = landmarks.removeAt(oldIndex);
-    landmarks.insert(newIndex, item);
 
-    _updateActiveTripLandmarks(landmarks);
+    if (_selectedDayFilter == null) {
+      final landmarks = List<Landmark>.from(trip.landmarks);
+      if (oldIndex < 0 || oldIndex >= landmarks.length) return;
+      final item = landmarks.removeAt(oldIndex);
+      landmarks.insert(newIndex, item);
+      _updateActiveTripLandmarks(landmarks);
+    } else {
+      final dayLandmarks =
+          trip.landmarks.where((l) => l.day == _selectedDayFilter).toList();
+      if (oldIndex < 0 || oldIndex >= dayLandmarks.length) return;
+
+      final movedItem = dayLandmarks.removeAt(oldIndex);
+      dayLandmarks.insert(newIndex, movedItem);
+
+      final updatedGlobal = <Landmark>[];
+      int dayIdx = 0;
+      for (final l in trip.landmarks) {
+        if (l.day == _selectedDayFilter) {
+          updatedGlobal.add(dayLandmarks[dayIdx++]);
+        } else {
+          updatedGlobal.add(l);
+        }
+      }
+      _updateActiveTripLandmarks(updatedGlobal);
+    }
   }
 
   void _updateActiveTripLandmarks(List<Landmark> newLandmarks) {

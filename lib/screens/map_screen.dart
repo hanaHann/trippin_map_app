@@ -28,7 +28,20 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
+  late PageController _carouselPageController;
   double _currentRotation = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _carouselPageController = PageController(viewportFraction: 0.88);
+  }
+
+  @override
+  void dispose() {
+    _carouselPageController.dispose();
+    super.dispose();
+  }
 
   Future<void> _openGoogleMapsNavigation(Landmark landmark) async {
     final String name = landmark.name.trim();
@@ -517,15 +530,23 @@ class _MapScreenState extends State<MapScreen> {
           ),
           IconButton(
             icon: Icon(
-              provider.showPermanentLabels
+              provider.labelDisplayMode == LabelDisplayMode.onMap
                   ? Icons.label
-                  : Icons.label_outlined,
-              color: provider.showPermanentLabels ? Colors.amber : null,
+                  : (provider.labelDisplayMode == LabelDisplayMode.hidden
+                      ? Icons.label_off_outlined
+                      : Icons.view_carousel_rounded),
+              color: provider.labelDisplayMode == LabelDisplayMode.onMap
+                  ? Colors.amber
+                  : (provider.labelDisplayMode == LabelDisplayMode.bottomDeck
+                      ? Colors.pinkAccent
+                      : null),
             ),
-            tooltip: provider.showPermanentLabels
-                ? '已開啟：常駐顯示名稱 (Google Maps 痛點解法)'
-                : '隱藏常駐名稱',
-            onPressed: () => provider.togglePermanentLabels(),
+            tooltip: provider.labelDisplayMode == LabelDisplayMode.onMap
+                ? '標籤模式 1：地圖常駐名稱 (點擊切換模式 2：隱藏標籤)'
+                : (provider.labelDisplayMode == LabelDisplayMode.hidden
+                    ? '標籤模式 2：隱藏標籤 (點擊切換模式 3：底部橫向卡片列)'
+                    : '標籤模式 3：底部橫向卡片列 (點擊切換模式 1：地圖常駐名稱)'),
+            onPressed: () => provider.cycleLabelDisplayMode(),
           ),
           IconButton(
             icon: const Icon(Icons.collections_bookmark_rounded),
@@ -614,7 +635,7 @@ class _MapScreenState extends State<MapScreen> {
                       point: landmark.location,
                       width: 220,
                       height: 100,
-                      alignment: Alignment.topCenter,
+                      alignment: Alignment.bottomCenter,
                       child: GestureDetector(
                         onTap: () {
                           showModalBottomSheet(
@@ -752,6 +773,121 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
           ),
+
+          // Mode 3: Bottom Horizontal Carousel Deck
+          if (provider.labelDisplayMode == LabelDisplayMode.bottomDeck &&
+              landmarks.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 16,
+              child: SizedBox(
+                height: 115,
+                child: PageView.builder(
+                  controller: _carouselPageController,
+                  itemCount: landmarks.length,
+                  onPageChanged: (index) {
+                    _mapController.move(landmarks[index].location, 15.5);
+                  },
+                  itemBuilder: (context, index) {
+                    final landmark = landmarks[index];
+                    final distNext = index < landmarks.length - 1
+                        ? provider.calculateDistanceKm(
+                            landmark.location, landmarks[index + 1].location)
+                        : null;
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(245),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                        border: Border.all(
+                            color: landmark.category.color, width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: landmark.category.color,
+                            child: Text(
+                              '${index + 1}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(landmark.category.iconSymbol,
+                                        style: const TextStyle(fontSize: 16)),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        landmark.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (landmark.address.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '📍 ${landmark.address}',
+                                    style: const TextStyle(
+                                        fontSize: 11, color: Colors.black54),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                if (distNext != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '🚗 距下一站: ${distNext.toStringAsFixed(1)} km',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.indigo),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            icon: const Icon(Icons.navigation,
+                                color: Colors.blue),
+                            onPressed: () =>
+                                _openGoogleMapsNavigation(landmark),
+                            tooltip: 'Google 地圖導航',
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
 
           // Interactive UI Controls (Excluded from RepaintBoundary)
           Positioned(

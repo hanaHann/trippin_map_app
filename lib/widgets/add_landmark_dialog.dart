@@ -106,6 +106,35 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
     }
   }
 
+  Future<void> _handlePasteToSearch() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data != null && data.text != null && data.text!.isNotEmpty) {
+      setState(() {
+        _searchController.text = data.text!;
+      });
+      _handleSearch();
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📋 已自動貼上剪貼簿內容並開始搜尋！'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ 剪貼簿中沒有文字內容'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _handleParseLink() async {
     setState(() {
       _isParsingLink = true;
@@ -131,11 +160,11 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       if (result.resolutionMethod == 'viewport_coords') {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.orange.shade800,
-            duration: const Duration(seconds: 4),
+          const SnackBar(
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
             content: Text(
-              '⚠️ 提醒：此網址僅包含視角中心點 (${result.latitude.toStringAsFixed(4)}, ${result.longitude.toStringAsFixed(4)})\n若欲定位特定店家，請在 Google 地圖點選「特定店家地標圖示」再點「分享」複製連結！',
+              '⚠️ 提醒：此網址僅包含視角中心點\n若欲定位特定店家，請在 Google 地圖點選「特定店家地標圖示」再點「分享」複製連結！',
             ),
           ),
         );
@@ -145,14 +174,14 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
             backgroundColor: Colors.green.shade700,
             duration: const Duration(seconds: 3),
             content: Text(
-              '🎉 成功精準解析地標：「${result.name}」！\n📍 座標：${result.latitude.toStringAsFixed(5)}, ${result.longitude.toStringAsFixed(5)}',
+              '🎉 成功精準解析地標：「${result.name}」！',
             ),
           ),
         );
       }
     } else {
       setState(() {
-        _parseError = '無法解析此連結或經緯度格式，請確認網址或使用關鍵字搜尋。';
+        _parseError = '無法解析此連結，請確認網址或使用關鍵字搜尋。';
       });
     }
   }
@@ -367,11 +396,31 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             Expanded(
                               child: TextField(
                                 controller: _searchController,
+                                onChanged: (_) => setState(() {}),
                                 decoration: InputDecoration(
                                   hintText: '輸入景點、餐廳或地址名稱...',
                                   prefixIcon: const Icon(Icons.search),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  suffixIcon: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.paste_rounded,
+                                            color: Colors.indigo),
+                                        tooltip: '貼上剪貼簿內容並搜尋',
+                                        onPressed: _handlePasteToSearch,
+                                      ),
+                                      if (_searchController.text.isNotEmpty)
+                                        IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () => setState(() {
+                                            _searchController.clear();
+                                            _searchResults.clear();
+                                          }),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 onSubmitted: (_) => _handleSearch(),
@@ -384,6 +433,21 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _handlePasteToSearch,
+                            icon: const Icon(Icons.paste_rounded,
+                                color: Colors.indigo),
+                            label: const Text('📋 貼上剪貼簿並搜尋'),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         if (_isSearching)
                           const Padding(
@@ -394,7 +458,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                           Expanded(
                             child: _searchResults.isEmpty
                                 ? const Center(
-                                    child: Text('輸入名稱點擊搜尋',
+                                    child: Text('輸入名稱或點擊貼上進行搜尋',
                                         style: TextStyle(color: Colors.grey)))
                                 : ListView.builder(
                                     shrinkWrap: true,
@@ -503,40 +567,13 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _selectedLat != null
-                                      ? '緯度: ${_selectedLat!.toStringAsFixed(4)}'
-                                      : '尚未選取座標',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _selectedLng != null
-                                      ? '經度: ${_selectedLng!.toStringAsFixed(4)}'
-                                      : '尚未選取座標',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ),
-                            ),
-                          ],
+                        TextField(
+                          controller: _addressController,
+                          decoration: InputDecoration(
+                            labelText: '系統地址 (選填)',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(

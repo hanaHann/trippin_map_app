@@ -734,9 +734,8 @@ class _MapScreenState extends State<MapScreen> {
                         },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            // Permanent Text Label Badge (Placed cleanly ABOVE Number Circle)
+                            // Permanent Text Label Badge (Placed cleanly ABOVE Number Circle Pin)
                             if (provider.showPermanentLabels) ...[
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -770,10 +769,10 @@ class _MapScreenState extends State<MapScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 2),
                             ],
 
-                            // Map Number Circle Pin (Sits directly right above route dot)
+                            // Map Number Circle Pin (Background matches Day Color)
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
@@ -796,8 +795,8 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
-                            // 2px gap spacer to route dot
-                            const SizedBox(height: 2),
+                            // Gap spacer to lift number circle & text label badge uniformly ABOVE the route point!
+                            const SizedBox(height: 6),
                           ],
                         ),
                       ),

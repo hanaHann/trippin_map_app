@@ -18,6 +18,7 @@ import '../widgets/add_landmark_dialog.dart';
 import '../widgets/landmark_list_drawer.dart';
 import '../widgets/ad_banner_widget.dart';
 import 'trip_list_screen.dart';
+import '../utils/day_colors.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -497,6 +498,56 @@ class _MapScreenState extends State<MapScreen> {
         ? landmarks.first.location
         : const LatLng(35.6812, 139.7671); // Tokyo default
 
+    // Group landmarks by day for day-specific route lines, dots, and markers
+    final Map<int, List<Landmark>> landmarksByDay = {};
+    for (final l in landmarks) {
+      landmarksByDay.putIfAbsent(l.day, () => []).add(l);
+    }
+
+    final List<Polyline> dayPolylines = [];
+    final List<CircleMarker> dayCircles = [];
+
+    if (provider.showRouteLines) {
+      landmarksByDay.forEach((day, dayLandmarks) {
+        final dayColor = getDayColor(day);
+
+        if (dayLandmarks.length > 1) {
+          dayPolylines.add(
+            Polyline(
+              points: dayLandmarks.map((l) => l.location).toList(),
+              color: dayColor.withAlpha(220),
+              strokeWidth: 4.5,
+            ),
+          );
+
+          final dots = _generateRouteDots(dayLandmarks);
+          for (final point in dots) {
+            dayCircles.add(
+              CircleMarker(
+                point: point,
+                radius: 3.5,
+                color: dayColor.withAlpha(240),
+                borderColor: Colors.white,
+                borderStrokeWidth: 1.5,
+              ),
+            );
+          }
+        }
+
+        for (final l in dayLandmarks) {
+          dayCircles.add(
+            CircleMarker(
+              point: l.location,
+              radius: 6.5,
+              color: dayColor,
+              borderColor: Colors.white,
+              borderStrokeWidth: 2.5,
+            ),
+          );
+        }
+      });
+    }
+
     return Scaffold(
       drawer: LandmarkListDrawer(
         onSelectLandmark: (landmark) {
@@ -588,48 +639,22 @@ class _MapScreenState extends State<MapScreen> {
                   retinaMode: RetinaMode.isHighDensity(context),
                 ),
 
-                // Polyline Route Connectors & Waypoint Dots
+                // Polyline Route Connectors & Waypoint Dots (Day Color Coded)
                 if (provider.showRouteLines && landmarks.length > 1) ...[
                   PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: landmarks.map((l) => l.location).toList(),
-                        color: Colors.indigo.withAlpha(200),
-                        strokeWidth: 4.0,
-                      ),
-                    ],
+                    polylines: dayPolylines,
                   ),
                   CircleLayer(
-                    circles: [
-                      // Intermediate route segment dots
-                      ..._generateRouteDots(landmarks).map(
-                        (point) => CircleMarker(
-                          point: point,
-                          radius: 3.5,
-                          color: Colors.indigoAccent,
-                          borderColor: Colors.white,
-                          borderStrokeWidth: 1.5,
-                        ),
-                      ),
-                      // Landmark vertex dots
-                      ...landmarks.map(
-                        (l) => CircleMarker(
-                          point: l.location,
-                          radius: 6.5,
-                          color: Colors.indigo,
-                          borderColor: Colors.white,
-                          borderStrokeWidth: 2.5,
-                        ),
-                      ),
-                    ],
+                    circles: dayCircles,
                   ),
                 ],
 
-                // Custom Pin Markers with Always-Visible Permanent Labels
+                // Custom Pin Markers with Always-Visible Permanent Labels (Day Color Coded)
                 MarkerLayer(
                   markers: landmarks.asMap().entries.map((entry) {
                     final index = entry.key;
                     final landmark = entry.value;
+                    final dayColor = getDayColor(landmark.day);
 
                     return Marker(
                       point: landmark.location,
@@ -705,7 +730,7 @@ class _MapScreenState extends State<MapScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Permanent Label Badge
+                            // Permanent Label Badge (Border matches Day Color)
                             if (provider.showPermanentLabels)
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -721,14 +746,14 @@ class _MapScreenState extends State<MapScreen> {
                                     ),
                                   ],
                                   border: Border.all(
-                                    color: landmark.category.color,
-                                    width: 1.5,
+                                    color: dayColor,
+                                    width: 1.8,
                                   ),
                                 ),
                                 constraints: const BoxConstraints(maxWidth: 210),
                                 child: Text(
                                   landmark.name,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.black87,
@@ -740,12 +765,12 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
 
-                            // Map Pin Icon Badge
+                            // Map Pin Icon Badge (Background matches Day Color)
                             const SizedBox(height: 2),
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
-                                color: landmark.category.color,
+                                color: dayColor,
                                 shape: BoxShape.circle,
                                 boxShadow: const [
                                   BoxShadow(
@@ -776,7 +801,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // Mode 3: Bottom Horizontal Carousel Deck
+          // Mode 3: Bottom Horizontal Carousel Deck (Day Color Coded)
           if (provider.labelDisplayMode == LabelDisplayMode.bottomDeck &&
               landmarks.isNotEmpty)
             Positioned(
@@ -793,6 +818,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                   itemBuilder: (context, index) {
                     final landmark = landmarks[index];
+                    final dayColor = getDayColor(landmark.day);
                     final distNext = index < landmarks.length - 1
                         ? provider.calculateDistanceKm(
                             landmark.location, landmarks[index + 1].location)
@@ -814,13 +840,13 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ],
                         border: Border.all(
-                            color: landmark.category.color, width: 2),
+                            color: dayColor, width: 2),
                       ),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 16,
-                            backgroundColor: landmark.category.color,
+                            backgroundColor: dayColor,
                             child: Text(
                               '${index + 1}',
                               style: const TextStyle(

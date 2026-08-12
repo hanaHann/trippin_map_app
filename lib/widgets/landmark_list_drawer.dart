@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/landmark.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
+import '../utils/day_colors.dart';
 
 class LandmarkListDrawer extends StatelessWidget {
   final Function(Landmark) onSelectLandmark;
@@ -202,7 +203,7 @@ class LandmarkListDrawer extends StatelessWidget {
             ),
           ),
 
-          // Day Filter Chips
+          // Day Filter Chips (Day Color Coded)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -215,11 +216,25 @@ class LandmarkListDrawer extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 ...List.generate(activeTrip.totalDays, (i) => i + 1).map((d) {
+                  final dayColor = getDayColor(d);
+                  final isSelected = provider.selectedDayFilter == d;
+
                   return Padding(
                     padding: const EdgeInsets.only(right: 6.0),
                     child: FilterChip(
-                      label: Text('第 $d 天'),
-                      selected: provider.selectedDayFilter == d,
+                      avatar: CircleAvatar(
+                        radius: 5,
+                        backgroundColor: dayColor,
+                      ),
+                      label: Text(
+                        '第 $d 天',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedColor: dayColor,
                       onSelected: (selected) =>
                           provider.setSelectedDayFilter(selected ? d : null),
                     ),
@@ -230,7 +245,7 @@ class LandmarkListDrawer extends StatelessWidget {
           ),
           const Divider(height: 1),
 
-          // Landmarks Drag-to-Reorder List with Full-Width Names & Swipe-to-Delete
+          // Landmarks Drag-to-Reorder List
           Expanded(
             child: landmarks.isEmpty
                 ? const Center(
@@ -245,6 +260,7 @@ class LandmarkListDrawer extends StatelessWidget {
                     },
                     itemBuilder: (context, index) {
                       final item = landmarks[index];
+                      final dayColor = getDayColor(item.day);
                       double? distNext;
                       if (index < landmarks.length - 1) {
                         distNext = provider.calculateDistanceKm(
@@ -258,7 +274,7 @@ class LandmarkListDrawer extends StatelessWidget {
                         children: [
                           Dismissible(
                             key: ValueKey(item.id),
-                            direction: DismissDirection.endToStart, // Swipe left
+                            direction: DismissDirection.endToStart,
                             background: Container(
                               margin: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
@@ -312,19 +328,21 @@ class LandmarkListDrawer extends StatelessWidget {
                             },
                             onDismissed: (_) {
                               provider.deleteLandmark(item.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('已刪除「${item.name}」')),
-                              );
                             },
                             child: Card(
+                              elevation: 1.5,
                               margin: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: dayColor.withAlpha(120),
+                                  width: 1.2,
+                                ),
                               ),
                               child: InkWell(
                                 onTap: () {
-                                  Navigator.of(context).pop(); // Close full screen drawer
+                                  Navigator.of(context).pop();
                                   onSelectLandmark(item);
                                 },
                                 borderRadius: BorderRadius.circular(12),
@@ -334,21 +352,19 @@ class LandmarkListDrawer extends StatelessWidget {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Row 1: Full-Width Title Line (Index + Icon + Name + Drag Handle)
                                       Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
                                           CircleAvatar(
                                             radius: 14,
-                                            backgroundColor: item.category.color
-                                                .withAlpha(40),
+                                            backgroundColor: dayColor,
                                             child: Text(
                                               '${index + 1}',
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 12,
-                                                color: item.category.color,
+                                                color: Colors.white,
                                               ),
                                             ),
                                           ),
@@ -357,20 +373,43 @@ class LandmarkListDrawer extends StatelessWidget {
                                               style: const TextStyle(
                                                   fontSize: 16)),
                                           const SizedBox(width: 6),
-                                          // Full-width Landmark Name
                                           Expanded(
-                                            child: Text(
-                                              item.name,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                                height: 1.3,
-                                              ),
-                                              softWrap: true,
+                                            child: Wrap(
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                Text(
+                                                  item.name,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                    height: 1.3,
+                                                  ),
+                                                ),
+                                                if (provider.selectedDayFilter == null) ...[
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                        horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: dayColor.withAlpha(30),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                      border: Border.all(
+                                                          color: dayColor, width: 1),
+                                                    ),
+                                                    child: Text(
+                                                      '第 ${item.day} 天',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: dayColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          // Drag Handle to Reorder
                                           ReorderableDragStartListener(
                                             index: index,
                                             child: const Padding(

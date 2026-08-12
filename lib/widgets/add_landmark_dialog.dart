@@ -35,6 +35,8 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   final _searchController = TextEditingController();
   List<SearchPlaceResult> _searchResults = [];
   bool _isSearching = false;
+  bool _hasSearched = false;
+  String? _searchError;
 
   // Form Fields
   final _nameController = TextEditingController();
@@ -84,15 +86,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
       setState(() {
         _linkController.text = data.text!;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📋 已自動貼上剪貼簿內容！'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
+      _handleParseLink();
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -113,15 +107,6 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
         _searchController.text = data.text!;
       });
       _handleSearch();
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📋 已自動貼上剪貼簿內容並開始搜尋！'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -136,6 +121,13 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   }
 
   Future<void> _handleParseLink() async {
+    if (_linkController.text.trim().isEmpty) {
+      setState(() {
+        _parseError = '請先貼上或輸入 Google 地圖網址！';
+      });
+      return;
+    }
+
     setState(() {
       _isParsingLink = true;
       _parseError = null;
@@ -158,27 +150,15 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
       });
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      if (result.resolutionMethod == 'viewport_coords') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 4),
-            content: Text(
-              '⚠️ 提醒：此網址僅包含視角中心點\n若欲定位特定店家，請在 Google 地圖點選「特定店家地標圖示」再點「分享」複製連結！',
-            ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 3),
+          content: Text(
+            '🎉 成功精準解析地標：「${result.name}」！',
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green.shade700,
-            duration: const Duration(seconds: 3),
-            content: Text(
-              '🎉 成功精準解析地標：「${result.name}」！',
-            ),
-          ),
-        );
-      }
+        ),
+      );
     } else {
       setState(() {
         _parseError = '無法解析此連結，請確認網址或使用關鍵字搜尋。';
@@ -187,10 +167,17 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   }
 
   Future<void> _handleSearch() async {
-    if (_searchController.text.trim().isEmpty) return;
+    if (_searchController.text.trim().isEmpty) {
+      setState(() {
+        _searchError = '請先輸入景點、餐廳或地址名稱！';
+      });
+      return;
+    }
 
     setState(() {
       _isSearching = true;
+      _hasSearched = true;
+      _searchError = null;
     });
 
     final results =
@@ -201,6 +188,10 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
     setState(() {
       _searchResults = results;
       _isSearching = false;
+      if (results.isEmpty) {
+        _searchError =
+            '找不到與「${_searchController.text.trim()}」相符的地點，請換個關鍵字或改用「Google 連結」。';
+      }
     });
   }
 
@@ -287,9 +278,9 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
             TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(icon: Icon(Icons.link), text: 'Google 連結'),
-                Tab(icon: Icon(Icons.search), text: '即時搜尋'),
-                Tab(icon: Icon(Icons.edit_location), text: '詳細資料'),
+                Tab(text: 'Google 連結'),
+                Tab(text: '即時搜尋'),
+                Tab(text: '詳細資料'),
               ],
             ),
             // Tab Content
@@ -297,87 +288,103 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Tab 1: Google Maps Link Parser (Wrapped in SingleChildScrollView for Keyboard Safety)
+                  // Tab 1: Google Maps Link Parser
                   SingleChildScrollView(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          '請貼上 Google 地圖分享連結或經緯度 (例如: @35.6812,139.7671 或 https://maps.app.goo.gl/...)',
+                          '請貼上 Google 地圖分享連結',
                           style: TextStyle(fontSize: 13, color: Colors.grey),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _linkController,
                           maxLines: 2,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) => setState(() {
+                            if (_parseError != null) _parseError = null;
+                          }),
                           decoration: InputDecoration(
-                            hintText: '在此貼上 Google 地圖分享網址...',
+                            hintText: '貼上 Google 地圖網址...',
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12)),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.paste_rounded,
-                                      color: Colors.indigo),
-                                  tooltip: '貼上剪貼簿內容',
-                                  onPressed: _handlePasteFromClipboard,
-                                ),
-                                if (_linkController.text.isNotEmpty)
-                                  IconButton(
+                            suffixIcon: _linkController.text.isNotEmpty
+                                ? IconButton(
                                     icon: const Icon(Icons.clear),
-                                    onPressed: () =>
-                                        setState(() => _linkController.clear()),
-                                  ),
-                              ],
-                            ),
+                                    onPressed: () => setState(() {
+                                      _linkController.clear();
+                                      _parseError = null;
+                                    }),
+                                  )
+                                : null,
                           ),
                         ),
                         if (_parseError != null) ...[
-                          const SizedBox(height: 8),
-                          Text(_parseError!,
-                              style: const TextStyle(color: Colors.red)),
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline,
+                                    color: Colors.red.shade700, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _parseError!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade900,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton.icon(
+                              child: OutlinedButton(
                                 onPressed: _handlePasteFromClipboard,
-                                icon: const Icon(Icons.paste_rounded,
-                                    color: Colors.indigo),
-                                label: const Text('貼上剪貼簿'),
                                 style: OutlinedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
+                                child: const Text('貼上並解析'),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: ElevatedButton.icon(
+                              child: ElevatedButton(
                                 onPressed:
                                     _isParsingLink ? null : _handleParseLink,
-                                icon: _isParsingLink
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isParsingLink
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
                                         child: CircularProgressIndicator(
                                             strokeWidth: 2))
-                                    : const Icon(Icons.bolt),
-                                label: const Text('自動解析地點'),
-                                style: ElevatedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
+                                    : const Text('解析'),
                               ),
                             ),
                           ],
@@ -386,7 +393,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                     ),
                   ),
 
-                  // Tab 2: Keyword Search (Scrollable ListView)
+                  // Tab 2: Keyword Search
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -396,32 +403,25 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             Expanded(
                               child: TextField(
                                 controller: _searchController,
-                                onChanged: (_) => setState(() {}),
+                                onChanged: (_) => setState(() {
+                                  if (_searchError != null) _searchError = null;
+                                }),
                                 decoration: InputDecoration(
-                                  hintText: '輸入景點、餐廳或地址名稱...',
-                                  prefixIcon: const Icon(Icons.search),
+                                  hintText: '輸入景點、餐廳或地址...',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.paste_rounded,
-                                            color: Colors.indigo),
-                                        tooltip: '貼上剪貼簿內容並搜尋',
-                                        onPressed: _handlePasteToSearch,
-                                      ),
-                                      if (_searchController.text.isNotEmpty)
-                                        IconButton(
+                                  suffixIcon: _searchController.text.isNotEmpty
+                                      ? IconButton(
                                           icon: const Icon(Icons.clear),
                                           onPressed: () => setState(() {
                                             _searchController.clear();
                                             _searchResults.clear();
+                                            _searchError = null;
+                                            _hasSearched = false;
                                           }),
-                                        ),
-                                    ],
-                                  ),
+                                        )
+                                      : null,
                                 ),
                                 onSubmitted: (_) => _handleSearch(),
                               ),
@@ -429,6 +429,13 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             const SizedBox(width: 8),
                             ElevatedButton(
                               onPressed: _isSearching ? null : _handleSearch,
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12, horizontal: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                               child: const Text('搜尋'),
                             ),
                           ],
@@ -436,18 +443,47 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton.icon(
+                          child: OutlinedButton(
                             onPressed: _handlePasteToSearch,
-                            icon: const Icon(Icons.paste_rounded,
-                                color: Colors.indigo),
-                            label: const Text('📋 貼上剪貼簿並搜尋'),
                             style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
+                            child: const Text('貼上並搜尋'),
                           ),
                         ),
+                        if (_searchError != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline,
+                                    color: Colors.red.shade700, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _searchError!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade900,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         if (_isSearching)
                           const Padding(
@@ -457,9 +493,15 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                         else
                           Expanded(
                             child: _searchResults.isEmpty
-                                ? const Center(
-                                    child: Text('輸入名稱或點擊貼上進行搜尋',
-                                        style: TextStyle(color: Colors.grey)))
+                                ? Center(
+                                    child: Text(
+                                      _hasSearched
+                                          ? '查無結果'
+                                          : '請輸入名稱或點擊貼上進行搜尋',
+                                      style:
+                                          const TextStyle(color: Colors.grey),
+                                    ),
+                                  )
                                 : ListView.builder(
                                     shrinkWrap: true,
                                     itemCount: _searchResults.length,
@@ -474,8 +516,6 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                         subtitle: Text(item.displayName,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis),
-                                        leading: const Icon(Icons.place,
-                                            color: Colors.redAccent),
                                         onTap: () => _selectSearchResult(item),
                                       );
                                     },
@@ -491,6 +531,36 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (_selectedLat == null || _selectedLng == null) ...[
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.amber.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    color: Colors.amber.shade900, size: 20),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    '尚未選取座標定位點！請先在「Google 連結」解析或「即時搜尋」選取地點。',
+                                    style: TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         TextField(
                           controller: _nameController,
                           decoration: InputDecoration(

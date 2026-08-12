@@ -140,19 +140,9 @@ class GoogleMapsParser {
       } catch (_) {}
     }
 
-    // Priority 3 (Lowest Fallback): Camera Viewport Center (@lat,lng)
-    if (lat == null || lng == null) {
-      final viewportCoords = _extractViewportCoordinates(input) ??
-          _extractViewportCoordinates(locationHeaderUrl) ??
-          _extractViewportCoordinates(expandedUrl) ??
-          _extractViewportCoordinates(htmlBody);
-
-      if (viewportCoords != null) {
-        lat = viewportCoords[0];
-        lng = viewportCoords[1];
-        resolutionMethod = 'viewport_coords';
-      }
-    }
+    // Priority 3: Do NOT fall back to generic camera viewport center (@lat,lng)
+    // If a link only contains viewport coords without a specific POI pin or place name,
+    // return null so it displays "找不到此地點" rather than navigating to the user's home location!
 
     // Resolve missing place name via Reverse Geocoding if name is missing or generic
     if (lat != null && lng != null) {
@@ -339,27 +329,6 @@ class GoogleMapsParser {
     return null;
   }
 
-  /// Extracts viewport camera center coordinates (@35.6268,139.7766 or center=35.6268,139.7766)
-  static List<double>? _extractViewportCoordinates(String str) {
-    if (str.isEmpty) return null;
-
-    final pAt = RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(str);
-    if (pAt != null) {
-      final lat = double.tryParse(pAt.group(1)!);
-      final lng = double.tryParse(pAt.group(2)!);
-      if (lat != null && lng != null) return [lat, lng];
-    }
-
-    final pCenter =
-        RegExp(r'center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)').firstMatch(str);
-    if (pCenter != null) {
-      final lat = double.tryParse(pCenter.group(1)!);
-      final lng = double.tryParse(pCenter.group(2)!);
-      if (lat != null && lng != null) return [lat, lng];
-    }
-
-    return null;
-  }
 
   /// Extracts place name from Google Maps URL path (/maps/place/PLACE_NAME/ or ?q=PLACE_NAME)
   static String? _extractNameFromUrl(String url) {

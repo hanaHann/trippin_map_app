@@ -165,8 +165,22 @@ class TripProvider with ChangeNotifier {
     if (_selectedDayFilter == null) {
       final landmarks = List<Landmark>.from(trip.landmarks);
       if (oldIndex < 0 || oldIndex >= landmarks.length) return;
-      final item = landmarks.removeAt(oldIndex);
+      var item = landmarks.removeAt(oldIndex);
       landmarks.insert(newIndex, item);
+
+      // Automatically assign target day when dragging across days
+      int targetDay = item.day;
+      if (newIndex > 0) {
+        targetDay = landmarks[newIndex - 1].day;
+      } else if (landmarks.length > 1) {
+        targetDay = landmarks[1].day;
+      }
+
+      if (item.day != targetDay) {
+        item = item.copyWith(day: targetDay);
+        landmarks[newIndex] = item;
+      }
+
       _updateActiveTripLandmarks(landmarks);
     } else {
       final dayLandmarks =

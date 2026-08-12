@@ -93,6 +93,28 @@ class Landmark {
 
   LatLng get location => LatLng(latitude, longitude);
 
+  Landmark copyWith({
+    String? id,
+    String? name,
+    double? latitude,
+    double? longitude,
+    LandmarkCategory? category,
+    String? address,
+    String? notes,
+    int? day,
+  }) {
+    return Landmark(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      category: category ?? this.category,
+      address: address ?? this.address,
+      notes: notes ?? this.notes,
+      day: day ?? this.day,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

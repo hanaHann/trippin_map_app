@@ -250,19 +250,38 @@ class GoogleMapsParser {
   /// Performs Nominatim search with smart fallbacks
   static Future<SearchPlaceResult?> _searchPlaceWithFallbacks(
       String extractedName, String locationHeaderUrl) async {
-    // 1. Try extractedName directly
+    // Priority A: Try Postal Code in locationHeaderUrl query param 'q'
+    if (locationHeaderUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(locationHeaderUrl);
+        final rawQ = uri.queryParameters['q'];
+        if (rawQ != null) {
+          final decodedQ = _cleanAndDecodeName(rawQ);
+          final postalMatch =
+              RegExp(r'〒?\s*(\d{3}-?\d{4})').firstMatch(decodedQ);
+          if (postalMatch != null) {
+            final code = postalMatch.group(1)!;
+            final postalResults = await NominatimService.searchPlaces(code);
+            if (postalResults.isNotEmpty) {
+              return postalResults.first;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Priority B: Try extractedName directly
     List<SearchPlaceResult> results =
         await NominatimService.searchPlaces(extractedName);
     if (results.isNotEmpty) return results.first;
 
-    // 2. If locationHeaderUrl query param exists (e.g., Tokyo Taito Nishiasakusa)
+    // Priority C: If locationHeaderUrl query param exists (e.g., Tokyo Taito Nishiasakusa)
     if (locationHeaderUrl.isNotEmpty) {
       try {
         final uri = Uri.parse(locationHeaderUrl);
         final rawQuery = uri.queryParameters['q'];
         if (rawQuery != null) {
           final decoded = _cleanAndDecodeName(rawQuery);
-          // Try city/district portion of address
           final searchClean = decoded
               .replaceAll('〒', '')
               .replaceAll('日本', 'Japan ')

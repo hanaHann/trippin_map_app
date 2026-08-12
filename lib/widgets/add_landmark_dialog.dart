@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -235,15 +236,30 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final viewInsetsBottom = mediaQuery.viewInsets.bottom;
+
+    // Total vertical margin for Dialog insetPadding (16 top + 16 bottom = 32)
+    const double verticalMargin = 32.0;
+
+    // Calculate exact max height available for Container without overflowing Dialog
+    final availableHeight = screenHeight - viewInsetsBottom - verticalMargin;
+    final maxDialogHeight =
+        math.max(200.0, math.min(screenHeight * 0.70, availableHeight));
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      insetPadding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 16 + viewInsetsBottom,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         constraints: BoxConstraints(
           maxWidth: 500,
-          maxHeight: screenHeight * 0.75,
+          maxHeight: maxDialogHeight,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -575,8 +591,11 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                             Expanded(
                               child: DropdownButtonFormField<LandmarkCategory>(
                                 initialValue: _selectedCategory,
+                                isExpanded: true,
                                 decoration: InputDecoration(
                                   labelText: '分類標籤',
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 12),
                                   border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12)),
                                 ),
@@ -584,12 +603,17 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                   return DropdownMenuItem(
                                     value: cat,
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(cat.iconSymbol),
-                                        const SizedBox(width: 6),
-                                        Text(cat.displayName,
-                                            style:
-                                                const TextStyle(fontSize: 13)),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            cat.displayName,
+                                            style: const TextStyle(fontSize: 12),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   );
@@ -601,7 +625,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                 },
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Builder(
                                 builder: (context) {
@@ -614,15 +638,19 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
 
                                   return DropdownButtonFormField<int>(
                                     initialValue: _selectedDay,
+                                    isExpanded: true,
                                     decoration: InputDecoration(
                                       labelText: '分配天數',
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 12),
                                       border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(12)),
                                     ),
                                     items: List.generate(maxDayOption, (i) => i + 1)
                                         .map((d) => DropdownMenuItem(
                                               value: d,
-                                              child: Text('第 $d 天'),
+                                              child: Text('第 $d 天',
+                                                  style: const TextStyle(fontSize: 12)),
                                             ))
                                         .toList(),
                                     onChanged: (val) {

@@ -805,7 +805,7 @@ class _MapScreenState extends State<MapScreen> {
                         return Marker(
                           point: landmark.location,
                           width: 220,
-                          height: 68,
+                          height: 96,
                           alignment: Alignment.topCenter,
                           child: GestureDetector(
                             onTap: () {

@@ -669,7 +669,7 @@ class _MapScreenState extends State<MapScreen> {
                       point: landmark.location,
                       width: 220,
                       height: 100,
-                      alignment: Alignment.bottomCenter,
+                      alignment: Alignment.topCenter,
                       child: GestureDetector(
                         onTap: () {
                           showModalBottomSheet(
@@ -735,7 +735,10 @@ class _MapScreenState extends State<MapScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Permanent Text Label Badge (Placed cleanly ABOVE Number Circle Pin)
+                            // 6px Gap below Route Location Dot (at top)
+                            const SizedBox(height: 6),
+
+                            // [Middle]: Permanent Text Label Badge (Landmark Name)
                             if (provider.showPermanentLabels) ...[
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -769,10 +772,10 @@ class _MapScreenState extends State<MapScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                             ],
 
-                            // Map Number Circle Pin (Background matches Day Color)
+                            // [Bottom]: Map Number Circle Pin (Day Color Coded)
                             Container(
                               padding: const EdgeInsets.all(5),
                               decoration: BoxDecoration(
@@ -795,8 +798,6 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                             ),
-                            // Gap spacer to lift number circle & text label badge uniformly ABOVE the route point!
-                            const SizedBox(height: 6),
                           ],
                         ),
                       ),

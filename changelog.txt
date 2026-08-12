@@ -2,6 +2,16 @@
                       MapMap - CHANGELOG & VERSION HISTORY
 ========================================================================
 
+[v1.0.28+29] - 2026-08-12
+------------------------------------------------------------------------
+✨ 地圖 Marker 精確垂直懸掛層級 (Top Route Dot -> Middle Text Label -> Bottom Number Pin):
+  • 📍 調整 Marker 錨點為 `Alignment.topCenter`，地圖元件由上至下依序呈現：
+      1. 🥇 最上面：● 路線定位圓點 (Route Location Dot)
+      2. 🥈 中間：🏷️ 景點名稱文字卡片 (Landmark Name Label)
+      3. 🥉 最下面：🔴 數字圓圈 (Number Pin Circle)
+  • 🎨 懸掛佈局符合視線引導，景點名稱與數字清晰懸掛於定位點下方！
+
+
 [v1.0.27+28] - 2026-08-12
 ------------------------------------------------------------------------
 ✨ 還原完美 Marker 垂直間距與對齊結構 (Restore Perfect Pre-8PM Marker Spacing & Anchoring):

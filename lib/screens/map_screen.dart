@@ -750,9 +750,11 @@ class _MapScreenState extends State<MapScreen> {
                                     width: 1.8,
                                   ),
                                 ),
-                                constraints: const BoxConstraints(maxWidth: 210),
+                                constraints: const BoxConstraints(maxWidth: 220),
                                 child: Text(
-                                  landmark.name,
+                                  provider.selectedDayFilter == null
+                                      ? '第 ${landmark.day} 天 · ${landmark.name}'
+                                      : landmark.name,
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -867,7 +869,9 @@ class _MapScreenState extends State<MapScreen> {
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        landmark.name,
+                                        provider.selectedDayFilter == null
+                                            ? '第 ${landmark.day} 天 · ${landmark.name}'
+                                            : landmark.name,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,

@@ -31,6 +31,7 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   late PageController _carouselPageController;
   double _currentRotation = 0.0;
+  String? _selectedLandmarkId;
 
   @override
   void initState() {
@@ -650,160 +651,190 @@ class _MapScreenState extends State<MapScreen> {
                 ],
 
                 // Custom Pin Markers with Always-Visible Permanent Labels (Day Color Coded)
-                MarkerLayer(
-                  markers: landmarks.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final landmark = entry.value;
-                    final dayColor = getDayColor(landmark.day);
-
-                    int dayIndex = 1;
-                    if (provider.selectedDayFilter == null) {
-                      final dayItems =
-                          landmarks.where((l) => l.day == landmark.day).toList();
-                      dayIndex = dayItems.indexOf(landmark) + 1;
-                    } else {
-                      dayIndex = index + 1;
+                Builder(
+                  builder: (context) {
+                    final markerEntries = landmarks.asMap().entries.toList();
+                    if (_selectedLandmarkId != null) {
+                      markerEntries.sort((a, b) {
+                        if (a.value.id == _selectedLandmarkId) return 1;
+                        if (b.value.id == _selectedLandmarkId) return -1;
+                        return 0;
+                      });
                     }
 
-                    return Marker(
-                      point: landmark.location,
-                      width: 220,
-                      height: 120,
-                      alignment: Alignment.bottomCenter,
-                      child: GestureDetector(
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (context) => Container(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                    return MarkerLayer(
+                      markers: markerEntries.map((entry) {
+                        final index = entry.key;
+                        final landmark = entry.value;
+                        final dayColor = getDayColor(landmark.day);
+                        final isSelected = landmark.id == _selectedLandmarkId;
+
+                        int dayIndex = 1;
+                        if (provider.selectedDayFilter == null) {
+                          final dayItems = landmarks
+                              .where((l) => l.day == landmark.day)
+                              .toList();
+                          dayIndex = dayItems.indexOf(landmark) + 1;
+                        } else {
+                          dayIndex = index + 1;
+                        }
+
+                        return Marker(
+                          point: landmark.location,
+                          width: 220,
+                          height: 68,
+                          alignment: Alignment.topCenter,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedLandmarkId = landmark.id;
+                              });
+                              showModalBottomSheet(
+                                context: context,
+                                builder: (context) => Container(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(landmark.category.iconSymbol,
-                                          style: const TextStyle(fontSize: 20)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          landmark.name,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18,
+                                      Row(
+                                        children: [
+                                          Text(landmark.category.iconSymbol,
+                                              style: const TextStyle(
+                                                  fontSize: 20)),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              landmark.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18,
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                          '📍 地址: ${landmark.address.isNotEmpty ? landmark.address : "無系統地址"}'),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                          '💡 筆記: ${landmark.notes.isNotEmpty ? landmark.notes : "無備註"}'),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              onPressed: () {
+                                                Navigator.of(context).pop();
+                                                _openGoogleMapsNavigation(
+                                                    landmark);
+                                              },
+                                              icon:
+                                                  const Icon(Icons.navigation),
+                                              label: const Text('Google 地圖導航'),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                              provider
+                                                  .deleteLandmark(landmark.id);
+                                            },
+                                            icon: const Icon(Icons.delete,
+                                                color: Colors.red),
+                                            tooltip: '刪除此地標',
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      '📍 地址: ${landmark.address.isNotEmpty ? landmark.address : "無系統地址"}'),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                      '💡 筆記: ${landmark.notes.isNotEmpty ? landmark.notes : "無備註"}'),
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                            _openGoogleMapsNavigation(landmark);
-                                          },
-                                          icon: const Icon(Icons.navigation),
-                                          label: const Text('Google 地圖導航'),
+                                ),
+                              );
+                            },
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                // [Top]: 🏷️ Landmark Name Card (Sits 3px above Number Circle Pin)
+                                if (provider.showPermanentLabels) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : Colors.white.withAlpha(240),
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: isSelected
+                                              ? dayColor.withAlpha(120)
+                                              : Colors.black26,
+                                          blurRadius: isSelected ? 8 : 4,
+                                          offset: const Offset(0, 2),
                                         ),
+                                      ],
+                                      border: Border.all(
+                                        color: dayColor,
+                                        width: isSelected ? 2.5 : 1.8,
                                       ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        onPressed: () {
-                                          Navigator.of(context).pop();
-                                          provider.deleteLandmark(landmark.id);
-                                        },
-                                        icon: const Icon(Icons.delete,
-                                            color: Colors.red),
-                                        tooltip: '刪除此地標',
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // [Top]: 🏷️ Landmark Name Card (Floats high above, clear of route lines)
-                            if (provider.showPermanentLabels) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withAlpha(240),
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
                                     ),
-                                  ],
-                                  border: Border.all(
-                                    color: dayColor,
-                                    width: 1.8,
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 220),
+                                    child: Text(
+                                      landmark.name,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected
+                                            ? Colors.black
+                                            : Colors.black87,
+                                      ),
+                                      maxLines: 3,
+                                      softWrap: true,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
-                                ),
-                                constraints: const BoxConstraints(maxWidth: 220),
-                                child: Text(
-                                  landmark.name,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                  maxLines: 3,
-                                  softWrap: true,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                            ],
-
-                            // [Middle]: 🔴 Map Number Circle Pin (Near the route location dot)
-                            Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: dayColor,
-                                shape: BoxShape.circle,
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black38,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
+                                  const SizedBox(height: 3),
                                 ],
-                              ),
-                              child: Text(
-                                '$dayIndex',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
 
-                            // [Bottom]: 2px Gap to Route Location Dot at bottom
-                            const SizedBox(height: 2),
-                          ],
-                        ),
-                      ),
+                                // [Middle]: 🔴 Map Number Circle Pin (Sits 5px above Route Location Dot)
+                                Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: dayColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black38,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '$dayIndex',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+
+                                // [Bottom]: 5px Gap (+3px added) to Route Location Dot at bottom
+                                const SizedBox(height: 5),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     );
-                  }).toList(),
+                  },
                 ),
               ],
             ),

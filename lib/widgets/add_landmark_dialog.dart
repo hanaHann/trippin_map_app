@@ -84,10 +84,21 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   Future<void> _handlePasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data != null && data.text != null && data.text!.isNotEmpty) {
-      setState(() {
-        _linkController.text = data.text!;
-      });
-      _handleParseLink();
+      final rawText = data.text!.trim();
+      final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(rawText);
+      if (urlMatch != null) {
+        setState(() {
+          _linkController.text = urlMatch.group(0)!;
+          _parseError = null;
+        });
+        _handleParseLink();
+      } else {
+        setState(() {
+          _linkController.text = rawText;
+          _parseError =
+              '⚠️ 剪貼簿中未偵測到有效網址（可能受中文輸入法或複製格式影響），請切換至英數鍵盤重新貼上網址！';
+        });
+      }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -122,9 +133,21 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
   }
 
   Future<void> _handleParseLink() async {
-    if (_linkController.text.trim().isEmpty) {
+    final text = _linkController.text.trim();
+    if (text.isEmpty) {
       setState(() {
         _parseError = '請先貼上或輸入 Google 地圖網址！';
+      });
+      return;
+    }
+
+    final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(text);
+    if (urlMatch == null &&
+        !text.contains('goo.gl') &&
+        !text.contains('google.com')) {
+      setState(() {
+        _parseError =
+            '⚠️ 輸入內容非有效 Google 地圖網址（例如受中文輸入法影響轉為候選字）。請切換至英數鍵盤重新貼上網址！';
       });
       return;
     }
@@ -134,7 +157,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
       _parseError = null;
     });
 
-    final result = await GoogleMapsParser.parseInput(_linkController.text);
+    final result = await GoogleMapsParser.parseInput(text);
 
     if (!mounted) return;
 

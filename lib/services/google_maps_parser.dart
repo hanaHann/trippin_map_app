@@ -250,7 +250,31 @@ class GoogleMapsParser {
   /// Performs Nominatim search with smart fallbacks
   static Future<SearchPlaceResult?> _searchPlaceWithFallbacks(
       String extractedName, String locationHeaderUrl) async {
-    // Priority A: Try Postal Code in locationHeaderUrl query param 'q'
+    // 1. Try extractedName directly
+    List<SearchPlaceResult> results =
+        await NominatimService.searchPlaces(extractedName);
+    if (results.isNotEmpty) return results.first;
+
+    // 2. Try tokenized landmark segments (e.g. "一花婚紗", "一花婚紗 東京")
+    final nameSegments = extractedName
+        .split(RegExp(r'[\s·,|]+'))
+        .map((s) => s.trim())
+        .where((s) => s.length > 1)
+        .toList();
+
+    if (nameSegments.length > 1) {
+      final firstToken = nameSegments.first;
+      if (firstToken.isNotEmpty && firstToken != 'Google' && firstToken != 'Maps') {
+        results = await NominatimService.searchPlaces(firstToken);
+        if (results.isNotEmpty) return results.first;
+
+        final combinedQuery = '$firstToken ${nameSegments[1]}';
+        results = await NominatimService.searchPlaces(combinedQuery);
+        if (results.isNotEmpty) return results.first;
+      }
+    }
+
+    // 3. Try Postal Code in locationHeaderUrl query param 'q'
     if (locationHeaderUrl.isNotEmpty) {
       try {
         final uri = Uri.parse(locationHeaderUrl);
@@ -265,33 +289,6 @@ class GoogleMapsParser {
             if (postalResults.isNotEmpty) {
               return postalResults.first;
             }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // Priority B: Try extractedName directly
-    List<SearchPlaceResult> results =
-        await NominatimService.searchPlaces(extractedName);
-    if (results.isNotEmpty) return results.first;
-
-    // Priority C: If locationHeaderUrl query param exists (e.g., Tokyo Taito Nishiasakusa)
-    if (locationHeaderUrl.isNotEmpty) {
-      try {
-        final uri = Uri.parse(locationHeaderUrl);
-        final rawQuery = uri.queryParameters['q'];
-        if (rawQuery != null) {
-          final decoded = _cleanAndDecodeName(rawQuery);
-          final searchClean = decoded
-              .replaceAll('〒', '')
-              .replaceAll('日本', 'Japan ')
-              .split(' ')
-              .where((s) => s.length > 2)
-              .take(3)
-              .join(' ');
-          if (searchClean.isNotEmpty) {
-            results = await NominatimService.searchPlaces(searchClean);
-            if (results.isNotEmpty) return results.first;
           }
         }
       } catch (_) {}
@@ -336,6 +333,13 @@ class GoogleMapsParser {
       if (lat != null && lng != null) return [lat, lng];
     }
 
+    final pHexPin = RegExp(r'(?:\\x213d|%213d)(-?\d+\.\d+)(?:\\x214d|%214d)(-?\d+\.\d+)').firstMatch(str);
+    if (pHexPin != null) {
+      final lat = double.tryParse(pHexPin.group(1)!);
+      final lng = double.tryParse(pHexPin.group(2)!);
+      if (lat != null && lng != null) return [lat, lng];
+    }
+
     final pRaw =
         RegExp(r'^\s*(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})\s*$')
             .firstMatch(str);
@@ -347,7 +351,6 @@ class GoogleMapsParser {
 
     return null;
   }
-
 
   /// Extracts place name from Google Maps URL path (/maps/place/PLACE_NAME/ or ?q=PLACE_NAME)
   static String? _extractNameFromUrl(String url) {

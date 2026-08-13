@@ -2,6 +2,13 @@
                       MapMap - CHANGELOG & VERSION HISTORY
 ========================================================================
 
+[v1.0.0+38] - 2026-08-13
+------------------------------------------------------------------------
+✨ 升級 iOS 最低支援版本至 15.0 符合 App Store Connect 最新規範 (Upgrade iOS MinimumOSVersion to 15.0):
+  • 🍎 更新 Podfile 與 Xcode 構建檔 `IPHONEOS_DEPLOYMENT_TARGET` 至 `15.0`，完全相容 Apple 2027 年最新強制規範，消除 App Store 上傳警告。
+  • 📚 更新全域開發規範文檔 `APP_DEVELOPMENT_STANDARDS.md`，同步各專案 iOS 支援標準。
+
+
 [v1.0.0+37] - 2026-08-13
 ------------------------------------------------------------------------
 ✨ 剪貼簿網址智能純化與中文輸入法候選字防護 (Smart Clipboard URL Purification & IME Protection):

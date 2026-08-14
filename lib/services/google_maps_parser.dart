@@ -188,7 +188,7 @@ class GoogleMapsParser {
       reqNoRedirect.followRedirects = false;
       reqNoRedirect.headers.addAll({
         'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
       });
 
@@ -250,13 +250,43 @@ class GoogleMapsParser {
   /// Performs Nominatim search with smart fallbacks
   static Future<SearchPlaceResult?> _searchPlaceWithFallbacks(
       String extractedName, String locationHeaderUrl) async {
-    // 1. Try extractedName directly
+    // 1. Try exact street address extracted from locationHeaderUrl query param 'q'
+    if (locationHeaderUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse(locationHeaderUrl);
+        final rawQ = uri.queryParameters['q'];
+        if (rawQ != null && rawQ.isNotEmpty) {
+          final decodedQ = _cleanAndDecodeName(rawQ).replaceAll('−', '-').replaceAll('〒', ' ').replaceAll('Chome', '');
+          final districtMatch = RegExp(r'([A-Za-z]+)[\s,]+(\d+)[-,\s]+(\d+)[-,\s]+(\d+)').firstMatch(decodedQ);
+          if (districtMatch != null) {
+            final cleanStreetAddr = '${districtMatch.group(1)} ${districtMatch.group(2)}-${districtMatch.group(3)}-${districtMatch.group(4)}';
+            final addressResults = await NominatimService.searchPlaces(cleanStreetAddr);
+            if (addressResults.isNotEmpty) return addressResults.first;
+          }
+
+          final addrMatch = RegExp(
+            r'([A-Za-z0-9\s,-]+(?:City|District|Ward|Street|Road|Ave|Way|Dr)[-,\s\d]+)',
+            caseSensitive: false,
+          ).firstMatch(decodedQ);
+          if (addrMatch != null) {
+            final streetAddr = addrMatch.group(1)!.trim();
+            if (streetAddr.isNotEmpty && streetAddr.length > 5) {
+              final addressResults = await NominatimService.searchPlaces(streetAddr);
+              if (addressResults.isNotEmpty) return addressResults.first;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Try extractedName directly
     List<SearchPlaceResult> results =
         await NominatimService.searchPlaces(extractedName);
     if (results.isNotEmpty) return results.first;
 
-    // 2. Try tokenized landmark segments (e.g. "一花婚紗", "一花婚紗 東京")
+    // 3. Try tokenized landmark segments (e.g. "一花婚紗", "一花婚紗 東京")
     final nameSegments = extractedName
+        .replaceAll(RegExp(r'\d+[號室階F樓]'), '')
         .split(RegExp(r'[\s·,|]+'))
         .map((s) => s.trim())
         .where((s) => s.length > 1)
@@ -274,7 +304,7 @@ class GoogleMapsParser {
       }
     }
 
-    // 3. Try Postal Code in locationHeaderUrl query param 'q'
+    // 4. Try Postal Code in locationHeaderUrl query param 'q'
     if (locationHeaderUrl.isNotEmpty) {
       try {
         final uri = Uri.parse(locationHeaderUrl);

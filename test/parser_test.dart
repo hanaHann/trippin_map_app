@@ -25,6 +25,13 @@ void main() {
       expect(result.longitude, closeTo(139.73, 0.1));
     });
 
+    test('Parse exact user link https://maps.app.goo.gl/9zHDc3cD4BcHxwKy5?g_st=ic', () async {
+      final result = await GoogleMapsParser.parseInput('https://maps.app.goo.gl/9zHDc3cD4BcHxwKy5?g_st=ic');
+      expect(result, isNotNull);
+      expect(result!.latitude, closeTo(35.7099, 0.01));
+      expect(result.longitude, closeTo(139.7906, 0.01));
+    });
+
     test('Parse user short link https://maps.app.goo.gl/vcrrAQ6UXD3EChRS9 (木村堂 楊梅店)', () async {
       final result = await GoogleMapsParser.parseInput(
           'https://maps.app.goo.gl/vcrrAQ6UXD3EChRS9');

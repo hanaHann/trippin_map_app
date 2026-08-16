@@ -216,9 +216,14 @@ class _MapScreenState extends State<MapScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () async {
                           try {
-                            final hasAccess = await Gal.hasAccess(toAlbum: true);
+                            // putImage() below doesn't target a named album, so this
+                            // only needs add-only access (NSPhotoLibraryAddUsageDescription),
+                            // not the broader readWrite permission toAlbum:true requests
+                            // (which requires NSPhotoLibraryUsageDescription and crashes at
+                            // the OS level if that key isn't declared in Info.plist).
+                            final hasAccess = await Gal.hasAccess();
                             if (!hasAccess) {
-                              await Gal.requestAccess(toAlbum: true);
+                              await Gal.requestAccess();
                             }
                             await Gal.putImage(imageFile.path);
                             if (context.mounted) {

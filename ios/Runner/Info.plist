@@ -5,9 +5,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>我們需要相簿權限，以便將地圖圖片儲存至您的相簿。</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>我們需要相簿權限，以便將地圖圖片儲存至您的相簿。</string>
+	<string>當您在 MapMap 建立個人化旅遊地圖後（例如標註景點地標、規劃路線的行程圖），點選「儲存至相簿」會將這張地圖匯出成圖片並存入您的相簿，方便您日後離線查看或分享給親友，不會存取或讀取您相簿中的其他既有照片。</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

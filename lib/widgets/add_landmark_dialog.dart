@@ -272,11 +272,9 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
         math.max(200.0, math.min(screenHeight * 0.70, availableHeight));
 
     return Dialog(
-      insetPadding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: 16 + viewInsetsBottom,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(

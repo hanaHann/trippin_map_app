@@ -45,7 +45,7 @@ class TripPinApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       home: const _AppGate(),
     );
   }

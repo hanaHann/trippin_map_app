@@ -23,6 +23,7 @@ enum LabelDisplayMode {
 class TripProvider with ChangeNotifier {
   List<Trip> _trips = [];
   String? _activeTripId;
+  bool _isInitializing = true;
 
   // Visual Map Controls
   LabelDisplayMode _labelDisplayMode = LabelDisplayMode.onMap;
@@ -34,6 +35,7 @@ class TripProvider with ChangeNotifier {
     _loadTrips();
   }
 
+  bool get isInitializing => _isInitializing;
   List<Trip> get trips => _trips;
   String? get activeTripId => _activeTripId;
 
@@ -314,49 +316,52 @@ class TripProvider with ChangeNotifier {
   }
 
   Future<void> _loadTrips() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? tripsJson = prefs.getString('saved_trips');
-    final bool hasPromptedFirstTime =
-        prefs.getBool('has_prompted_first_time') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? tripsJson = prefs.getString('saved_trips');
+      final bool hasPromptedFirstTime =
+          prefs.getBool('has_prompted_first_time') ?? false;
 
-    if (tripsJson != null) {
-      try {
-        final List<dynamic> decoded = jsonDecode(tripsJson);
-        _trips = decoded.map((item) => Trip.fromJson(item)).map((t) {
-          if (t.id == 'tokyo-sample' && t.title == '東京 5 天 4 夜精華行程') {
-            return t.copyWith(title: '【範例】東京 5 天 4 夜精華行程');
-          }
-          if (t.id == 'kyoto-sample' && t.title == '京都古都巡禮與咖啡散策') {
-            return t.copyWith(title: '【範例】京都古都巡禮與咖啡散策');
-          }
-          return t;
-        }).toList();
-        _activeTripId = prefs.getString('active_trip_id');
-      } catch (e) {
+      if (tripsJson != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(tripsJson);
+          _trips = decoded.map((item) => Trip.fromJson(item)).map((t) {
+            if (t.id == 'tokyo-sample' && t.title == '東京 5 天 4 夜精華行程') {
+              return t.copyWith(title: '【範例】東京 5 天 4 夜精華行程');
+            }
+            if (t.id == 'kyoto-sample' && t.title == '京都古都巡禮與咖啡散策') {
+              return t.copyWith(title: '【範例】京都古都巡禮與咖啡散策');
+            }
+            return t;
+          }).toList();
+          _activeTripId = prefs.getString('active_trip_id');
+        } catch (e) {
+          _trips = sampleTrips;
+        }
+      } else if (!hasPromptedFirstTime) {
+        _isFirstTimeUser = true;
+        _trips = [
+          Trip(
+            id: 'my-first-trip',
+            title: '我的第一個行程',
+            description: '歡迎開始規劃您的第一趟行程',
+            totalDays: 3,
+            landmarks: [],
+            createdAt: DateTime.now(),
+          )
+        ];
+      } else {
         _trips = sampleTrips;
       }
-    } else if (!hasPromptedFirstTime) {
-      _isFirstTimeUser = true;
-      _trips = [
-        Trip(
-          id: 'my-first-trip',
-          title: '我的第一個行程',
-          description: '歡迎開始規劃您的第一趟行程',
-          totalDays: 3,
-          landmarks: [],
-          createdAt: DateTime.now(),
-        )
-      ];
-    } else {
-      _trips = sampleTrips;
-    }
 
-    if (_trips.isNotEmpty &&
-        (_activeTripId == null || !_trips.any((t) => t.id == _activeTripId))) {
-      _activeTripId = _trips.first.id;
+      if (_trips.isNotEmpty &&
+          (_activeTripId == null || !_trips.any((t) => t.id == _activeTripId))) {
+        _activeTripId = _trips.first.id;
+      }
+    } finally {
+      _isInitializing = false;
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   Future<void> _saveToPrefs() async {

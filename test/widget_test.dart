@@ -15,5 +15,6 @@ void main() {
         child: const TripPinApp(),
       ),
     );
+    await tester.pumpAndSettle();
   });
 }

@@ -10,7 +10,7 @@ class SplashView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.colorScheme.primaryContainer,
+      backgroundColor: const Color(0xFFF4EEDE),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

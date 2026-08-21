@@ -15,6 +15,7 @@ import '../models/landmark.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/add_landmark_dialog.dart';
+import '../widgets/edit_landmark_dialog.dart';
 import '../widgets/landmark_list_drawer.dart';
 import '../widgets/ad_banner_widget.dart';
 import 'trip_list_screen.dart';
@@ -761,7 +762,7 @@ class _MapScreenState extends State<MapScreen> {
                 TileLayer(
                   urlTemplate: _getTileUrl(provider.tileStyle),
                   subdomains: const ['a', 'b', 'c', 'd'],
-                  userAgentPackageName: 'com.hana.trip_pin_app',
+                  userAgentPackageName: 'com.hana.tripPinApp',
                   retinaMode: RetinaMode.isHighDensity(context),
                 ),
 
@@ -828,9 +829,9 @@ class _MapScreenState extends State<MapScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          Text(landmark.category.iconSymbol,
-                                              style: const TextStyle(
-                                                  fontSize: 20)),
+                                          Icon(landmark.category.icon,
+                                              color: landmark.category.color,
+                                              size: 20),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
@@ -865,6 +866,15 @@ class _MapScreenState extends State<MapScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
+                                          IconButton(
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                              showEditLandmarkDialog(
+                                                  context, landmark);
+                                            },
+                                            icon: const Icon(Icons.edit),
+                                            tooltip: '編輯此地標',
+                                          ),
                                           IconButton(
                                             onPressed: () {
                                               Navigator.of(context).pop();
@@ -1039,8 +1049,9 @@ class _MapScreenState extends State<MapScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    Text(landmark.category.iconSymbol,
-                                        style: const TextStyle(fontSize: 16)),
+                                    Icon(landmark.category.icon,
+                                        color: landmark.category.color,
+                                        size: 16),
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
@@ -1154,7 +1165,10 @@ class _MapScreenState extends State<MapScreen> {
 
       // FAB to Add Landmark
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(),
+        onPressed: () => _showAddDialog(
+          lat: _mapController.camera.center.latitude,
+          lng: _mapController.camera.center.longitude,
+        ),
         icon: const Icon(Icons.add_location),
         label: const Text('新增地標'),
         backgroundColor: Colors.indigo,

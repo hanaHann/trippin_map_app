@@ -1,11 +1,24 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'providers/trip_provider.dart';
 import 'screens/map_screen.dart';
+import 'screens/splash_view.dart';
+import 'services/remote_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Firebase.initializeApp() throws if google-services.json /
+    // GoogleService-Info.plist haven't been added to the native projects yet
+    // -- fall back to RemoteConfigService's hardcoded default ad unit ID
+    // rather than blocking app startup on that being set up.
+    await Firebase.initializeApp();
+    await RemoteConfigService.init();
+  } catch (_) {}
+
   await MobileAds.instance.initialize();
 
   runApp(
@@ -44,8 +57,37 @@ class TripPinApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      themeMode: ThemeMode.system,
-      home: const MapScreen(),
+      themeMode: ThemeMode.light,
+      home: const _AppGate(),
     );
+  }
+}
+
+/// 開啟 App 時的全螢幕 Loading 畫面守門員：等 `TripProvider` 的實際初始化
+/// 真的完成，且至少顯示過一個最短時間（避免瞬間載入畫面一閃而過）才切換到主畫面。
+class _AppGate extends StatefulWidget {
+  const _AppGate();
+
+  @override
+  State<_AppGate> createState() => _AppGateState();
+}
+
+class _AppGateState extends State<_AppGate> {
+  static const _minSplashDuration = Duration(milliseconds: 600);
+  bool _minDurationElapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(_minSplashDuration, () {
+      if (mounted) setState(() => _minDurationElapsed = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isInitializing = context.watch<TripProvider>().isInitializing;
+    final ready = _minDurationElapsed && !isInitializing;
+    return ready ? const MapScreen() : const SplashView();
   }
 }

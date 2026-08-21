@@ -1,0 +1,42 @@
+name: Tag Main on Push
+
+# 每次 push 到 main（例如手動把 develop merge 進 main），直接讀當下
+# pubspec.yaml 裡的版本號，打一個對應的 git tag 推上去，例如版本號是
+# 1.0.5+87 就打 v1.0.5+87。
+#
+# 版本號完全由人決定，不會自動改：開發時看 Fork（或 `git tag -l`）目前
+# 最新的 tag，自己把 pubspec.yaml 的 version 改成下一版，merge 進 main
+# 之後這支 workflow 只負責把對應的 tag 打好、推上去。
+#
+# 用 git rev-parse 檢查 tag 是否已存在來避免重複打——這支 workflow 本身
+# 不會產生新的 commit，push 一個 tag 也不會觸發 `branches: [main]` 這個
+# trigger，所以不需要額外的防迴圈判斷。
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag the current version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -E '^version: ' pubspec.yaml | sed -E 's/^version: *//')
+          TAG="v${VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"

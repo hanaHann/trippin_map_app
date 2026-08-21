@@ -6,6 +6,33 @@ import '../providers/trip_provider.dart';
 class TripListScreen extends StatelessWidget {
   const TripListScreen({super.key});
 
+  Future<void> _confirmDeleteTrip(BuildContext context, Trip trip) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('確認刪除行程'),
+            content: Text('確定要刪除「${trip.title}」嗎？刪除後將無法復原。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.of(context).pop(true),
+                child:
+                    const Text('刪除', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirmed && context.mounted) {
+      context.read<TripProvider>().deleteTrip(trip.id);
+    }
+  }
+
   void _showTripDialog(BuildContext context, {Trip? trip}) {
     final isEditing = trip != null;
     final titleController = TextEditingController(text: trip?.title ?? '');
@@ -167,7 +194,7 @@ class TripListScreen extends StatelessWidget {
                   } else if (val == 'edit') {
                     _showTripDialog(context, trip: trip);
                   } else if (val == 'delete') {
-                    provider.deleteTrip(trip.id);
+                    _confirmDeleteTrip(context, trip);
                   }
                 },
                 itemBuilder: (context) => [

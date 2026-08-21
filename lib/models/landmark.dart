@@ -31,22 +31,22 @@ extension LandmarkCategoryExtension on LandmarkCategory {
     }
   }
 
-  String get iconSymbol {
+  IconData get icon {
     switch (this) {
       case LandmarkCategory.food:
-        return '🍕';
+        return Icons.restaurant_rounded;
       case LandmarkCategory.attraction:
-        return '⛩️';
+        return Icons.temple_buddhist_rounded;
       case LandmarkCategory.hotel:
-        return '🏨';
+        return Icons.hotel_rounded;
       case LandmarkCategory.shopping:
-        return '🛍️';
+        return Icons.shopping_bag_rounded;
       case LandmarkCategory.cafe:
-        return '☕';
+        return Icons.local_cafe_rounded;
       case LandmarkCategory.transport:
-        return '🚌';
+        return Icons.directions_bus_rounded;
       case LandmarkCategory.favorite:
-        return '⭐';
+        return Icons.star_rounded;
     }
   }
 
@@ -129,18 +129,29 @@ class Landmark {
   }
 
   factory Landmark.fromJson(Map<String, dynamic> json) {
+    final latitude = (json['latitude'] as num).toDouble();
+    final longitude = (json['longitude'] as num).toDouble();
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      throw const FormatException('Landmark coordinates out of range');
+    }
+
     return Landmark(
       id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
       name: json['name'] ?? '未命名地點',
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
+      latitude: latitude,
+      longitude: longitude,
       category: LandmarkCategory.values.firstWhere(
         (e) => e.name == json['category'],
         orElse: () => LandmarkCategory.attraction,
       ),
       address: json['address'] ?? '',
       notes: json['notes'] ?? '',
-      day: json['day'] ?? 1,
+      day: (json['day'] as num?)?.toInt() ?? 1,
     );
   }
 }

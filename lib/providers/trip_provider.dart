@@ -122,10 +122,22 @@ class TripProvider with ChangeNotifier {
   void updateTrip(String tripId, String title, String description, int totalDays) {
     final index = _trips.indexWhere((t) => t.id == tripId);
     if (index != -1) {
+      // Every screen only ever renders days 1..totalDays (day filter chips,
+      // the drawer's day-grouped list, the map's day filter). A landmark
+      // left on a day beyond a newly-shrunk totalDays isn't deleted, but it
+      // becomes permanently invisible in every view -- indistinguishable
+      // from data loss to the user. Pull those landmarks back onto the new
+      // last day instead of silently stranding them.
+      final clampedLandmarks = _trips[index].landmarks.map((l) {
+        if (l.day > totalDays) return l.copyWith(day: totalDays);
+        return l;
+      }).toList();
+
       _trips[index] = _trips[index].copyWith(
         title: title,
         description: description,
         totalDays: totalDays,
+        landmarks: clampedLandmarks,
       );
       notifyListeners();
       _saveToPrefs();
@@ -155,6 +167,53 @@ class TripProvider with ChangeNotifier {
 
     final updatedLandmarks = List<Landmark>.from(trip.landmarks)
       ..removeWhere((l) => l.id == landmarkId);
+    _updateActiveTripLandmarks(updatedLandmarks);
+  }
+
+  /// Duplicates a landmark (same location/day/category/notes) and inserts
+  /// the copy immediately after the original. Returns the new landmark's
+  /// name, or null if the original landmark could not be found.
+  String? duplicateLandmark(String landmarkId) {
+    final trip = activeTrip;
+    if (trip == null) return null;
+
+    final index = trip.landmarks.indexWhere((l) => l.id == landmarkId);
+    if (index == -1) return null;
+
+    final original = trip.landmarks[index];
+    final duplicate = original.copyWith(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: '${original.name} (複製)',
+    );
+
+    final updatedLandmarks = List<Landmark>.from(trip.landmarks)
+      ..insert(index + 1, duplicate);
+    _updateActiveTripLandmarks(updatedLandmarks);
+    return duplicate.name;
+  }
+
+  void updateLandmark(
+    String landmarkId, {
+    String? name,
+    LandmarkCategory? category,
+    String? address,
+    String? notes,
+  }) {
+    final trip = activeTrip;
+    if (trip == null) return;
+
+    final updatedLandmarks = trip.landmarks.map((l) {
+      if (l.id == landmarkId) {
+        return l.copyWith(
+          name: name,
+          category: category,
+          address: address,
+          notes: notes,
+        );
+      }
+      return l;
+    }).toList();
+
     _updateActiveTripLandmarks(updatedLandmarks);
   }
 
@@ -325,7 +384,20 @@ class TripProvider with ChangeNotifier {
       if (tripsJson != null) {
         try {
           final List<dynamic> decoded = jsonDecode(tripsJson);
-          _trips = decoded.map((item) => Trip.fromJson(item)).map((t) {
+
+          // Parse trips defensively, one at a time: a single malformed trip
+          // should not discard every other, perfectly valid trip. Only fall
+          // back to sample data if literally nothing could be recovered.
+          final loadedTrips = <Trip>[];
+          for (final item in decoded) {
+            try {
+              loadedTrips.add(Trip.fromJson(item as Map<String, dynamic>));
+            } catch (_) {
+              // Skip this trip; keep the rest of the list intact.
+            }
+          }
+
+          _trips = loadedTrips.map((t) {
             if (t.id == 'tokyo-sample' && t.title == '東京 5 天 4 夜精華行程') {
               return t.copyWith(title: '【範例】東京 5 天 4 夜精華行程');
             }
@@ -334,6 +406,13 @@ class TripProvider with ChangeNotifier {
             }
             return t;
           }).toList();
+
+          if (_trips.isEmpty && decoded.isNotEmpty) {
+            // Every trip failed to parse -- only in this fully-unrecoverable
+            // case do we fall back to sample data.
+            _trips = sampleTrips;
+          }
+
           _activeTripId = prefs.getString('active_trip_id');
         } catch (e) {
           _trips = sampleTrips;
@@ -365,11 +444,18 @@ class TripProvider with ChangeNotifier {
   }
 
   Future<void> _saveToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = _trips.map((t) => t.toJson()).toList();
-    await prefs.setString('saved_trips', jsonEncode(jsonList));
-    if (_activeTripId != null) {
-      await prefs.setString('active_trip_id', _activeTripId!);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _trips.map((t) => t.toJson()).toList();
+      await prefs.setString('saved_trips', jsonEncode(jsonList));
+      if (_activeTripId != null) {
+        await prefs.setString('active_trip_id', _activeTripId!);
+      }
+    } catch (e) {
+      // Persistence failures (e.g. an unencodable value slipping through)
+      // must not become an unhandled Future error -- log and move on rather
+      // than silently and repeatedly failing every subsequent save.
+      debugPrint('Failed to save trips: $e');
     }
   }
 

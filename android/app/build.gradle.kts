@@ -4,6 +4,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The Google Services plugin hard-fails the build if google-services.json is
+// missing from this module. Apply it only once that file has actually been
+// added (see Firebase Console setup instructions) so the Android build keeps
+// working in the meantime.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.hana.trip_pin_app"
     compileSdk = flutter.compileSdkVersion
@@ -16,7 +24,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.hana.trip_pin_app"
+        applicationId = "com.hana.tripPinApp"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

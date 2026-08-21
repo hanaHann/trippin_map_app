@@ -204,8 +204,24 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
       _searchError = null;
     });
 
-    final results =
-        await NominatimService.searchPlaces(_searchController.text);
+    double? biasLat = widget.initialLat;
+    double? biasLng = widget.initialLng;
+    if (biasLat == null || biasLng == null) {
+      final activeLandmarks =
+          context.read<TripProvider>().activeTrip?.landmarks ?? [];
+      if (activeLandmarks.isNotEmpty) {
+        biasLat = activeLandmarks.map((l) => l.latitude).reduce((a, b) => a + b) /
+            activeLandmarks.length;
+        biasLng = activeLandmarks.map((l) => l.longitude).reduce((a, b) => a + b) /
+            activeLandmarks.length;
+      }
+    }
+
+    final results = await NominatimService.searchPlaces(
+      _searchController.text,
+      biasLatitude: biasLat,
+      biasLongitude: biasLng,
+    );
 
     if (!mounted) return;
 
@@ -253,7 +269,7 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
     context.read<TripProvider>().addLandmark(newLandmark);
     Navigator.of(context).pop(newLandmark);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('🎉 已成功新增「${newLandmark.name}」到行程！')),
+      SnackBar(content: Text('已成功新增「${newLandmark.name}」到行程！')),
     );
   }
 
@@ -626,7 +642,8 @@ class _AddLandmarkDialogState extends State<AddLandmarkDialog>
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(cat.iconSymbol),
+                                        Icon(cat.icon,
+                                            color: cat.color, size: 18),
                                         const SizedBox(width: 4),
                                         Flexible(
                                           child: Text(

@@ -1,12 +1,24 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'providers/trip_provider.dart';
 import 'screens/map_screen.dart';
 import 'screens/splash_view.dart';
+import 'services/remote_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Firebase.initializeApp() throws if google-services.json /
+    // GoogleService-Info.plist haven't been added to the native projects yet
+    // -- fall back to RemoteConfigService's hardcoded default ad unit ID
+    // rather than blocking app startup on that being set up.
+    await Firebase.initializeApp();
+    await RemoteConfigService.init();
+  } catch (_) {}
+
   await MobileAds.instance.initialize();
 
   runApp(

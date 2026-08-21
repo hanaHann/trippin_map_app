@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../services/remote_config_service.dart';
 
 class AdBannerWidget extends StatefulWidget {
   final String? customAdUnitId;
@@ -15,9 +16,6 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
 
-  // User's official Google AdMob Ad Unit ID (ca-app-pub-3229282743833938/4463856124)
-  static const String realAdUnitId = 'ca-app-pub-3229282743833938/4463856124';
-
   @override
   void initState() {
     super.initState();
@@ -31,10 +29,11 @@ class _AdBannerWidgetState extends State<AdBannerWidget> {
         : 'ca-app-pub-3940256099942544/6300978111';
 
     // Use test ID during local debug to prevent self-click policy violations,
-    // and use real user Ad Unit ID in release mode (App Store / TestFlight)
+    // and use the real Ad Unit ID (Firebase Remote Config, falling back to
+    // RemoteConfigService's hardcoded default) in release mode.
     final String adUnitId = kDebugMode
         ? testAdUnitId
-        : (widget.customAdUnitId ?? realAdUnitId);
+        : (widget.customAdUnitId ?? RemoteConfigService.mapBannerAdUnitId);
 
     _bannerAd = BannerAd(
       adUnitId: adUnitId,

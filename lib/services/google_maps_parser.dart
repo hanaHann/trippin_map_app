@@ -50,6 +50,61 @@ class GoogleMapsParser {
   /// Timeout duration for HTTP requests
   static const Duration timeoutDuration = Duration(seconds: 8);
 
+  /// Max response body size we'll bother parsing (guards against memory/CPU
+  /// pressure from an unexpectedly large response).
+  static const int _maxBodyBytes = 2 * 1024 * 1024;
+
+  /// Max length of any attacker/remote-influenced string handed to a regex
+  /// (legitimate place names/addresses are never anywhere near this long;
+  /// this bounds worst-case regex evaluation time).
+  static const int _maxRegexInputLength = 300;
+
+  static String _boundLength(String s, [int max = _maxRegexInputLength]) {
+    return s.length > max ? s.substring(0, max) : s;
+  }
+
+  /// Heuristic: does this decoded `q=` value look like a raw postal address
+  /// (e.g. "1 Chome-1-1 Kasumicho, Yamagata, 990-0039日本") rather than a
+  /// business/POI name? Google's lite share-link redirect falls back to a
+  /// bare address like this when it has no readable place title to give us.
+  /// In that case the string must NOT be truncated to its trailing words --
+  /// the house-number/ward at the front is needed for geocoding -- and must
+  /// NOT be shown verbatim as the landmark's name.
+  static bool _looksLikeRawAddress(String s) {
+    return RegExp(r'\d{3}-?\d{4}').hasMatch(s) &&
+        RegExp(r'\d+[-\s]\d+[-\s]?\d*').hasMatch(s);
+  }
+
+  /// Only Google's own domains are allowed to be fetched -- the parser is
+  /// meant to resolve Google Maps share links, not act as a general-purpose
+  /// URL fetcher for arbitrary attacker-supplied hosts.
+  ///
+  /// This is a label-based check (not a naive suffix regex) specifically to
+  /// reject lookalike hosts such as "google.com.evil.example", where
+  /// "google.com" appears as a leading substring but the real registrable
+  /// domain is "evil.example".
+  static bool _isAllowedMapsHost(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.host.isEmpty) return false;
+    final labels = uri.host.toLowerCase().split('.');
+    if (labels.length < 2) return false;
+
+    // goo.gl, and any subdomain of it (e.g. maps.app.goo.gl).
+    if (labels[labels.length - 2] == 'goo' && labels.last == 'gl') {
+      return true;
+    }
+
+    // google.<tld>, or google.<tld> with subdomains (e.g. www.google.com,
+    // maps.google.de, google.co.jp). The label "google" must be followed by
+    // only 1-2 short (2-3 char) labels that reach the END of the host --
+    // not an arbitrary attacker-controlled suffix.
+    final googleIdx = labels.indexOf('google');
+    if (googleIdx == -1) return false;
+    final tldLabels = labels.sublist(googleIdx + 1);
+    if (tldLabels.isEmpty || tldLabels.length > 2) return false;
+    return tldLabels.every((l) => l.length >= 2 && l.length <= 3);
+  }
+
   /// Production-grade parser for Google Maps URLs (including maps.app.goo.gl), share snippets, or coordinates.
   static Future<ParsedLocationResult?> parseInput(String rawInput) async {
     final String input = rawInput.trim();
@@ -88,7 +143,9 @@ class GoogleMapsParser {
     }
 
     // 2. HTTP Follow Redirect & Location Header Capture if input contains a URL
-    if (targetUrl.startsWith('http')) {
+    //    to a Google-owned domain (this parser resolves Google Maps share
+    //    links -- it must not fetch arbitrary attacker-supplied hosts).
+    if (targetUrl.startsWith('http') && _isAllowedMapsHost(targetUrl)) {
       final resolved = await _resolveUrlAndHtml(targetUrl);
       expandedUrl = resolved['expandedUrl'] ?? targetUrl;
       locationHeaderUrl = resolved['locationHeaderUrl'] ?? '';
@@ -151,7 +208,8 @@ class GoogleMapsParser {
           extractedName == 'Google 地圖' ||
           extractedName == 'Google Maps' ||
           extractedName.startsWith('自訂地點') ||
-          extractedName.startsWith('自訂定位點')) {
+          extractedName.startsWith('自訂定位點') ||
+          _looksLikeRawAddress(extractedName)) {
         final geocodedName = await _reverseGeocode(lat, lng);
         if (geocodedName != null && geocodedName.isNotEmpty) {
           extractedName = geocodedName;
@@ -211,7 +269,9 @@ class GoogleMapsParser {
           .timeout(timeoutDuration);
 
       currentUrl = response.request?.url.toString() ?? targetUrl;
-      htmlBody = response.body;
+      if (response.bodyBytes.length <= _maxBodyBytes) {
+        htmlBody = response.body;
+      }
     } catch (_) {}
 
     return {
@@ -232,6 +292,11 @@ class GoogleMapsParser {
         final decoded = _cleanAndDecodeName(rawQuery);
         if (decoded.isNotEmpty &&
             !RegExp(r'^-?\d+\.\d+(?:%2C|,)\s*-?\d+\.\d+$').hasMatch(decoded)) {
+          // A bare postal address (no readable POI title available) must be
+          // kept whole -- truncating it drops the house-number/ward at the
+          // front and breaks geocoding entirely.
+          if (_looksLikeRawAddress(decoded)) return decoded;
+
           // If query has store name appended (e.g. "... 一花婚紗 日本東京 Ichika Pre-wedding")
           final parts = decoded.split(' ');
           if (parts.length > 2) {
@@ -256,7 +321,7 @@ class GoogleMapsParser {
         final uri = Uri.parse(locationHeaderUrl);
         final rawQ = uri.queryParameters['q'];
         if (rawQ != null && rawQ.isNotEmpty) {
-          final decodedQ = _cleanAndDecodeName(rawQ).replaceAll('−', '-').replaceAll('〒', ' ').replaceAll('Chome', '');
+          final decodedQ = _boundLength(_cleanAndDecodeName(rawQ).replaceAll('−', '-').replaceAll('〒', ' ').replaceAll('Chome', ''));
           final districtMatch = RegExp(r'([A-Za-z]+)[\s,]+(\d+)[-,\s]+(\d+)[-,\s]+(\d+)').firstMatch(decodedQ);
           if (districtMatch != null) {
             final cleanStreetAddr = '${districtMatch.group(1)} ${districtMatch.group(2)}-${districtMatch.group(3)}-${districtMatch.group(4)}';
@@ -310,7 +375,7 @@ class GoogleMapsParser {
         final uri = Uri.parse(locationHeaderUrl);
         final rawQ = uri.queryParameters['q'];
         if (rawQ != null) {
-          final decodedQ = _cleanAndDecodeName(rawQ);
+          final decodedQ = _boundLength(_cleanAndDecodeName(rawQ));
           final postalMatch =
               RegExp(r'〒?\s*(\d{3}-?\d{4})').firstMatch(decodedQ);
           if (postalMatch != null) {
@@ -481,6 +546,12 @@ class GoogleMapsParser {
       }
       iterations++;
     }
+
+    // Strip Unicode bidi-override and zero-width characters so a crafted
+    // remote page can't produce a visually spoofed name (e.g. Trojan-Source
+    // style RTL override reordering, or invisible characters).
+    decoded = decoded.replaceAll(
+        RegExp(r'[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]'), '');
 
     return decoded.replaceAll('+', ' ').trim();
   }

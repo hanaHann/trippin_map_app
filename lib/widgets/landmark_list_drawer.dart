@@ -5,6 +5,7 @@ import '../models/landmark.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 import '../utils/day_colors.dart';
+import 'edit_landmark_dialog.dart';
 
 class LandmarkListDrawer extends StatelessWidget {
   final Function(Landmark) onSelectLandmark;
@@ -274,6 +275,19 @@ class LandmarkListDrawer extends StatelessWidget {
                         flatNodes.add(_DayHeaderNode(d));
                         final dayLandmarks =
                             landmarks.where((l) => l.day == d).toList();
+                        if (dayLandmarks.isEmpty) {
+                          // An empty day's header alone is only a sliver of
+                          // vertical space -- when a card is dragged toward
+                          // it, ReorderableListView's own drop-target math
+                          // (based on comparing the dragged item's extent
+                          // against each row's) can skip straight over the
+                          // header (and even the next day's header right
+                          // after it) without ever registering this day as
+                          // a valid landing slot. Give an empty day a real,
+                          // card-sized placeholder row so it has enough
+                          // vertical footprint to actually be droppable.
+                          flatNodes.add(_EmptyDayPlaceholderNode(d));
+                        }
                         for (int i = 0; i < dayLandmarks.length; i++) {
                           final item = dayLandmarks[i];
                           double? distNext;
@@ -290,12 +304,21 @@ class LandmarkListDrawer extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: flatNodes.length,
                       onReorderItem: (oldIndex, newIndex) {
+                        // Flutter's ReorderableListView already adjusts
+                        // newIndex for the removed item before invoking
+                        // onReorderItem -- do not decrement it again here.
                         final bool isDraggingDownwards = newIndex > oldIndex;
-                        if (newIndex > oldIndex) newIndex -= 1;
+
+                        final emptyDaysBeforeDrag = flatNodes
+                            .whereType<_EmptyDayPlaceholderNode>()
+                            .map((n) => n.day)
+                            .toSet();
 
                         final movedNode = flatNodes.removeAt(oldIndex);
 
                         if (movedNode is _LandmarkCardNode) {
+                          final originalDay = movedNode.landmark.day;
+
                           // Direction-aware Day Header drop logic:
                           // 1) Dragging DOWNWARDS onto a Day Header -> place AFTER the header (1st card of next day).
                           // 2) Dragging UPWARDS onto a day's last card -> place AFTER that last card (last card of previous day).
@@ -308,22 +331,94 @@ class LandmarkListDrawer extends StatelessWidget {
                             if (newIndex < flatNodes.length - 1 &&
                                 flatNodes[newIndex] is _LandmarkCardNode &&
                                 flatNodes[newIndex + 1] is _DayHeaderNode) {
-                              newIndex = newIndex + 1;
+                              // The landing slot is a day's last card, immediately
+                              // followed by the next day's header. This is only a
+                              // genuine cross-day drop (append after that day's
+                              // last card) if the dragged item started on a
+                              // DIFFERENT day. If it started on the SAME day as
+                              // the landing card, this is a same-day reorder that
+                              // happens to target the day's last position -- e.g.
+                              // swapping the last two cards of a day -- and must
+                              // NOT be pushed past the header, or it silently
+                              // lands back at its original spot.
+                              final landingCard =
+                                  flatNodes[newIndex] as _LandmarkCardNode;
+                              if (landingCard.landmark.day !=
+                                  movedNode.landmark.day) {
+                                newIndex = newIndex + 1;
+                              }
                             }
                           }
+
+                          // An empty day's header (or its placeholder row) is
+                          // far shorter than the dragged card, so Flutter's own
+                          // drop-target math can jump straight past an entire
+                          // empty day without ever resolving newIndex to a slot
+                          // inside it -- landing one or more days further than
+                          // intended. Detect that: figure out which day
+                          // newIndex would actually land in, and if getting
+                          // there from originalDay skipped over a day that was
+                          // empty before this drag, redirect to land in the
+                          // FIRST such skipped empty day instead.
+                          int resolvedDay = originalDay;
+                          for (int i = 0; i < newIndex && i < flatNodes.length; i++) {
+                            final n = flatNodes[i];
+                            if (n is _DayHeaderNode) resolvedDay = n.day;
+                          }
+                          if (resolvedDay != originalDay) {
+                            final step = resolvedDay > originalDay ? 1 : -1;
+                            for (int d = originalDay + step;
+                                d != resolvedDay;
+                                d += step) {
+                              if (emptyDaysBeforeDrag.contains(d)) {
+                                final headerIdx = flatNodes.indexWhere(
+                                    (n) => n is _DayHeaderNode && n.day == d);
+                                if (headerIdx != -1) {
+                                  newIndex = headerIdx + 1;
+                                }
+                                break;
+                              }
+                            }
+                          }
+
                           flatNodes.insert(newIndex, movedNode);
 
-                          final List<Landmark> updatedLandmarks = [];
-                          int currentDay = 1;
-                          for (final node in flatNodes) {
-                            if (node is _DayHeaderNode) {
-                              currentDay = node.day;
-                            } else if (node is _LandmarkCardNode) {
-                              updatedLandmarks.add(
-                                  node.landmark.copyWith(day: currentDay));
+                          if (provider.selectedDayFilter != null) {
+                            // Filtered single-day view: flatNodes only holds
+                            // that day's cards (no _DayHeaderNode present), so
+                            // it must NOT be used as the full replacement list
+                            // -- doing so would silently discard every other
+                            // day's landmarks. Splice the reordered day back
+                            // into the full, unfiltered landmark list instead.
+                            final reorderedDayIds = flatNodes
+                                .whereType<_LandmarkCardNode>()
+                                .map((n) => n.landmark.id)
+                                .toList();
+                            final Map<String, Landmark> byId = {
+                              for (final l in activeTrip.landmarks) l.id: l,
+                            };
+                            var dayCursor = 0;
+                            final updatedLandmarks =
+                                activeTrip.landmarks.map((l) {
+                              if (l.day == provider.selectedDayFilter) {
+                                return byId[reorderedDayIds[dayCursor++]]!;
+                              }
+                              return l;
+                            }).toList();
+                            provider.updateAllLandmarks(updatedLandmarks);
+                          } else {
+                            final List<Landmark> updatedLandmarks = [];
+                            int currentDay = 1;
+                            for (final node in flatNodes) {
+                              if (node is _DayHeaderNode) {
+                                currentDay = node.day;
+                              } else if (node is _LandmarkCardNode) {
+                                updatedLandmarks.add(
+                                    node.landmark.copyWith(day: currentDay));
+                              }
                             }
+                            provider.updateAllLandmarks(updatedLandmarks);
                           }
-                          provider.updateAllLandmarks(updatedLandmarks);
                         } else if (movedNode is _DayHeaderNode) {
                           flatNodes.insert(newIndex, movedNode);
                           final newHeaderDays = flatNodes
@@ -410,6 +505,29 @@ class LandmarkListDrawer extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          );
+                        } else if (node is _EmptyDayPlaceholderNode) {
+                          final dayColor = getDayColor(node.day);
+                          return Container(
+                            key: ValueKey(node.keyString),
+                            width: double.infinity,
+                            height: 64,
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: dayColor.withAlpha(90), width: 1.2),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '本天尚無地標，可從其他天拖曳地標到這裡',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: dayColor.withAlpha(180),
+                                fontSize: 12,
+                              ),
                             ),
                           );
                         } else {
@@ -524,9 +642,9 @@ class LandmarkListDrawer extends StatelessWidget {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(item.category.iconSymbol,
-                                                  style: const TextStyle(
-                                                      fontSize: 16)),
+                                              Icon(item.category.icon,
+                                                  color: item.category.color,
+                                                  size: 16),
                                               const SizedBox(width: 6),
                                               Expanded(
                                                 child: Text(
@@ -539,7 +657,63 @@ class LandmarkListDrawer extends StatelessWidget {
                                                   softWrap: true,
                                                 ),
                                               ),
-                                              const SizedBox(width: 6),
+                                              const SizedBox(width: 4),
+                                              Tooltip(
+                                                message: '編輯此地點',
+                                                child: InkWell(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16),
+                                                  onTap: () =>
+                                                      showEditLandmarkDialog(
+                                                          context, item),
+                                                  child: const Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 4),
+                                                    child: Icon(
+                                                        Icons.edit_rounded,
+                                                        color: Colors.grey,
+                                                        size: 22),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Tooltip(
+                                                message: '複製此地點',
+                                                child: InkWell(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16),
+                                                  onTap: () {
+                                                    final newName = provider
+                                                        .duplicateLandmark(
+                                                            item.id);
+                                                    if (newName != null) {
+                                                      ScaffoldMessenger.of(
+                                                              context)
+                                                          .showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                              '已複製為「$newName」'),
+                                                          duration:
+                                                              const Duration(
+                                                                  seconds: 2),
+                                                        ),
+                                                      );
+                                                    }
+                                                  },
+                                                  child: const Padding(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                            horizontal: 4),
+                                                    child: Icon(
+                                                        Icons.copy_rounded,
+                                                        color: Colors.grey,
+                                                        size: 22),
+                                                  ),
+                                                ),
+                                              ),
                                               ReorderableDragStartListener(
                                                 index: index,
                                                 child: const Padding(
@@ -669,6 +843,11 @@ abstract class _DrawerNode {
 class _DayHeaderNode extends _DrawerNode {
   final int day;
   _DayHeaderNode(this.day) : super('day_header_$day');
+}
+
+class _EmptyDayPlaceholderNode extends _DrawerNode {
+  final int day;
+  _EmptyDayPlaceholderNode(this.day) : super('empty_day_placeholder_$day');
 }
 
 class _LandmarkCardNode extends _DrawerNode {
